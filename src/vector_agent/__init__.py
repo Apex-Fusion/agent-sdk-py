@@ -17,10 +17,15 @@ from vector_agent.exceptions import (
 )
 from vector_agent.types import (
     AuditEntry,
+    BuildTxResult,
+    DeployContractResult,
+    DryRunResult,
+    InteractContractResult,
     SpendStatus,
     TokenBalance,
     TokenTxResult,
     TxResult,
+    TxSummary,
     VectorBalance,
 )
 
@@ -35,6 +40,11 @@ __all__ = [
     "TokenTxResult",
     "SpendStatus",
     "AuditEntry",
+    "BuildTxResult",
+    "DryRunResult",
+    "TxSummary",
+    "DeployContractResult",
+    "InteractContractResult",
     "VectorError",
     "InsufficientFundsError",
     "SpendLimitExceededError",

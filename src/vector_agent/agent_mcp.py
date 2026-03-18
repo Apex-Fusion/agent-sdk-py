@@ -10,7 +10,17 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from vector_agent.exceptions import TransactionError, VectorError
-from vector_agent.types import SpendStatus, TokenTxResult, TxResult, VectorBalance
+from vector_agent.types import (
+    BuildTxResult,
+    DeployContractResult,
+    DryRunResult,
+    InteractContractResult,
+    SpendStatus,
+    TokenTxResult,
+    TxResult,
+    TxSummary,
+    VectorBalance,
+)
 
 
 def _env(key: str, default: str | None = None) -> str | None:
@@ -213,6 +223,167 @@ class VectorAgentMCP:
                 token_quantity=int(token_info.get("amount", quantity)),
             )
         raise TransactionError(f"Unexpected token send response: {result}")
+
+    # ------------------------------------------------------------------
+    # Day 2: Advanced Operations (MCP wrappers)
+    # ------------------------------------------------------------------
+
+    async def dry_run(
+        self,
+        to: str,
+        lovelace: int = 0,
+        ada: float = 0,
+    ) -> DryRunResult:
+        """Dry run a transaction via MCP."""
+        if ada and lovelace:
+            raise VectorError("Specify either lovelace or ada, not both")
+        if ada:
+            lovelace = int(ada * 1_000_000)
+
+        args = {
+            "outputs": [{"address": to, "lovelace": lovelace}],
+        }
+        result = await self._call_tool("vector_dry_run", args)
+
+        if isinstance(result, dict):
+            return DryRunResult(
+                valid=result.get("valid", True),
+                fee_lovelace=int(result.get("fee", 0)),
+                fee_ada=str(result.get("feeAda", "0")),
+                execution_units=result.get("executionUnits"),
+                error=result.get("error"),
+            )
+        # Return parsed from text
+        return DryRunResult(valid=True, fee_lovelace=0, fee_ada="0")
+
+    async def build_transaction(
+        self,
+        outputs: list[dict],
+        metadata: dict | None = None,
+        submit: bool = False,
+    ) -> BuildTxResult:
+        """Build a multi-output transaction via MCP."""
+        args: dict[str, Any] = {"outputs": outputs}
+        if metadata:
+            args["metadata"] = json.dumps(metadata)
+        if submit:
+            args["submit"] = True
+
+        result = await self._call_tool("vector_build_transaction", args)
+
+        if isinstance(result, dict):
+            return BuildTxResult(
+                tx_cbor=result.get("txCbor", result.get("tx_cbor", "")),
+                tx_hash=result.get("txHash", result.get("tx_hash", "")),
+                fee_lovelace=int(result.get("fee", result.get("fee_lovelace", 0))),
+                fee_ada=str(result.get("feeAda", result.get("fee_ada", "0"))),
+                submitted=result.get("submitted", submit),
+                explorer_url=result.get("links", {}).get("explorer"),
+            )
+        raise TransactionError(f"Unexpected build transaction response: {result}")
+
+    async def get_transaction_history(
+        self,
+        address: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[TxSummary]:
+        """Get transaction history via MCP."""
+        args: dict[str, Any] = {}
+        if address:
+            args["address"] = address
+        if limit != 20:
+            args["limit"] = limit
+        if offset != 0:
+            args["offset"] = offset
+
+        result = await self._call_tool("vector_get_transaction_history", args)
+
+        if isinstance(result, list):
+            return [
+                TxSummary(
+                    tx_hash=tx.get("txHash", tx.get("tx_hash", "")),
+                    block_height=int(tx.get("blockHeight", tx.get("block_height", 0))),
+                    block_time=str(tx.get("blockTime", tx.get("block_time", ""))),
+                    fee=str(tx.get("fee", "0")),
+                )
+                for tx in result
+            ]
+        return []
+
+    async def deploy_contract(
+        self,
+        script_cbor: str,
+        script_type: str = "PlutusV2",
+        initial_datum: str | None = None,
+        lovelace: int = 2_000_000,
+    ) -> DeployContractResult:
+        """Deploy a smart contract via MCP."""
+        args: dict[str, Any] = {
+            "scriptCbor": script_cbor,
+            "scriptType": script_type,
+        }
+        if initial_datum:
+            args["initialDatum"] = initial_datum
+        if lovelace != 2_000_000:
+            args["lovelaceAmount"] = lovelace
+
+        result = await self._call_tool("vector_deploy_contract", args)
+
+        if isinstance(result, dict):
+            return DeployContractResult(
+                tx_hash=result.get("txHash", result.get("tx_hash", "")),
+                sender="",
+                recipient=result.get("scriptAddress", result.get("script_address", "")),
+                amount_lovelace=lovelace,
+                explorer_url=result.get("links", {}).get("explorer", ""),
+                script_address=result.get("scriptAddress", result.get("script_address", "")),
+                script_hash=result.get("scriptHash", result.get("script_hash", "")),
+                script_type=result.get("scriptType", result.get("script_type", script_type)),
+            )
+        raise TransactionError(f"Unexpected deploy response: {result}")
+
+    async def interact_contract(
+        self,
+        script_cbor: str,
+        script_type: str = "PlutusV2",
+        action: str = "spend",
+        redeemer: str | None = None,
+        datum: str | None = None,
+        lovelace: int = 2_000_000,
+        utxo_ref: dict | None = None,
+    ) -> InteractContractResult:
+        """Interact with a smart contract via MCP."""
+        args: dict[str, Any] = {
+            "scriptCbor": script_cbor,
+            "scriptType": script_type,
+            "action": action,
+        }
+        if redeemer:
+            args["redeemer"] = redeemer
+        if datum:
+            args["datum"] = datum
+        if lovelace != 2_000_000:
+            args["lovelaceAmount"] = lovelace
+        if utxo_ref:
+            args["utxoRef"] = {
+                "txHash": utxo_ref.get("tx_hash", utxo_ref.get("txHash", "")),
+                "outputIndex": utxo_ref.get("output_index", utxo_ref.get("outputIndex", 0)),
+            }
+
+        result = await self._call_tool("vector_interact_contract", args)
+
+        if isinstance(result, dict):
+            return InteractContractResult(
+                tx_hash=result.get("txHash", result.get("tx_hash", "")),
+                sender="",
+                recipient=result.get("scriptAddress", result.get("script_address", "")),
+                amount_lovelace=lovelace if action == "lock" else 0,
+                explorer_url=result.get("links", {}).get("explorer", ""),
+                script_address=result.get("scriptAddress", result.get("script_address", "")),
+                action=action,
+            )
+        raise TransactionError(f"Unexpected contract interaction response: {result}")
 
     # ------------------------------------------------------------------
     # Lifecycle

@@ -56,3 +56,51 @@ class AuditEntry(BaseModel):
     amount_lovelace: int
     recipient: str
     action: str
+
+
+# --- Day 2 types ---
+
+
+class DryRunResult(BaseModel):
+    """Result of a transaction dry run (simulation)."""
+
+    valid: bool
+    fee_lovelace: int
+    fee_ada: str
+    execution_units: dict | None = None
+    error: str | None = None
+
+
+class BuildTxResult(BaseModel):
+    """Result of building a transaction."""
+
+    tx_cbor: str
+    tx_hash: str
+    fee_lovelace: int
+    fee_ada: str
+    submitted: bool
+    explorer_url: str | None = None
+
+
+class TxSummary(BaseModel):
+    """Summary of a single transaction from history."""
+
+    tx_hash: str
+    block_height: int
+    block_time: str
+    fee: str
+
+
+class DeployContractResult(TxResult):
+    """Result of deploying a smart contract."""
+
+    script_address: str
+    script_hash: str
+    script_type: str
+
+
+class InteractContractResult(TxResult):
+    """Result of interacting with a smart contract."""
+
+    script_address: str
+    action: str

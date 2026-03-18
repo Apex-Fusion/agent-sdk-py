@@ -5,10 +5,12 @@ from __future__ import annotations
 import os
 from typing import Optional
 
+import httpx
 from pycardano import TransactionBuilder, TransactionOutput
 from pycardano.address import Address
 from pycardano.hash import ScriptHash
-from pycardano.transaction import Asset, AssetName, MultiAsset, Value
+from pycardano.plutus import PlutusV1Script, PlutusV2Script, PlutusData, RawPlutusData, script_hash as compute_script_hash
+from pycardano.transaction import Asset, AssetName, MultiAsset, TransactionInput, Value
 
 from vector_agent.chain.context import VectorChainContext
 from vector_agent.chain.ogmios import OgmiosClient
@@ -21,7 +23,17 @@ from vector_agent.exceptions import (
     WalletError,
 )
 from vector_agent.safety import SafetyLayer
-from vector_agent.types import TokenBalance, TokenTxResult, TxResult, VectorBalance
+from vector_agent.types import (
+    BuildTxResult,
+    DeployContractResult,
+    DryRunResult,
+    InteractContractResult,
+    TokenBalance,
+    TokenTxResult,
+    TxResult,
+    TxSummary,
+    VectorBalance,
+)
 from vector_agent.wallet.hd import HDWallet
 from vector_agent.wallet.skey import SkeyWallet
 
@@ -52,6 +64,7 @@ class VectorAgent:
         self,
         ogmios_url: str | None = None,
         submit_url: str | None = None,
+        koios_url: str | None = None,
         mnemonic: str | None = None,
         skey_path: str | None = None,
         account_index: int | None = None,
@@ -62,6 +75,10 @@ class VectorAgent:
         # Resolve from env
         self._ogmios_url = ogmios_url or _env("VECTOR_OGMIOS_URL")
         self._submit_url = submit_url or _env("VECTOR_SUBMIT_URL")
+        self._koios_url = (
+            koios_url
+            or _env("VECTOR_KOIOS_URL", "https://koios.vector.testnet.apexfusion.org")
+        )
         self._explorer_url = (
             explorer_url
             or _env("VECTOR_EXPLORER_URL", "https://vector.testnet.apexscan.org")
@@ -340,6 +357,465 @@ class VectorAgent:
             asset_name=asset_name,
             token_quantity=quantity,
         )
+
+    # ------------------------------------------------------------------
+    # Day 2: Advanced Operations
+    # ------------------------------------------------------------------
+
+    async def dry_run(
+        self,
+        to: str,
+        lovelace: int = 0,
+        ada: float = 0,
+    ) -> DryRunResult:
+        """Simulate a transaction without submitting — returns fee estimate.
+
+        Parameters
+        ----------
+        to: Recipient address
+        lovelace: Amount in lovelace
+        ada: Amount in ADA (alternative to lovelace)
+        """
+        if ada and lovelace:
+            raise VectorError("Specify either lovelace or ada, not both")
+        if ada:
+            lovelace = int(ada * 1_000_000)
+        if lovelace <= 0:
+            raise VectorError("Amount must be positive")
+
+        try:
+            recipient = Address.from_primitive(to)
+        except Exception as e:
+            raise InvalidAddressError(f"Invalid address: {to}: {e}") from e
+
+        await self._context.async_protocol_param()
+
+        try:
+            builder = TransactionBuilder(self._context)
+            builder.add_input_address(self._wallet.payment_address)
+            builder.add_output(TransactionOutput(recipient, lovelace))
+
+            tx = builder.build(
+                change_address=self._wallet.payment_address,
+            )
+            fee = tx.transaction_body.fee
+            tx_cbor = tx.to_cbor()
+            if isinstance(tx_cbor, bytes):
+                tx_cbor_hex = tx_cbor.hex()
+            else:
+                tx_cbor_hex = tx_cbor
+
+            # Evaluate via Ogmios
+            eval_result = None
+            try:
+                eval_result = await self._ogmios.evaluate_tx(tx_cbor_hex)
+            except Exception:
+                pass  # Evaluation is optional
+
+            execution_units = None
+            if eval_result and isinstance(eval_result, list):
+                total_mem = sum(item.get("budget", {}).get("memory", 0) for item in eval_result)
+                total_cpu = sum(item.get("budget", {}).get("cpu", 0) for item in eval_result)
+                if total_mem > 0 or total_cpu > 0:
+                    execution_units = {"memory": total_mem, "cpu": total_cpu}
+
+            return DryRunResult(
+                valid=True,
+                fee_lovelace=fee,
+                fee_ada=_lovelace_to_ada(fee),
+                execution_units=execution_units,
+            )
+        except Exception as e:
+            return DryRunResult(
+                valid=False,
+                fee_lovelace=0,
+                fee_ada="0",
+                error=str(e),
+            )
+
+    async def build_transaction(
+        self,
+        outputs: list[dict],
+        metadata: dict | None = None,
+        submit: bool = False,
+    ) -> BuildTxResult:
+        """Build a multi-output transaction.
+
+        Parameters
+        ----------
+        outputs: List of dicts with 'address', 'lovelace', optional 'assets'
+        metadata: Optional transaction metadata
+        submit: If True, sign and submit. If False, return unsigned CBOR.
+        """
+        if not outputs:
+            raise VectorError("At least one output is required")
+
+        total_lovelace = sum(o.get("lovelace", 0) for o in outputs)
+        self._safety.enforce_transaction(total_lovelace)
+
+        await self._context.async_protocol_param()
+
+        try:
+            builder = TransactionBuilder(self._context)
+            builder.add_input_address(self._wallet.payment_address)
+
+            for output in outputs:
+                addr = Address.from_primitive(output["address"])
+                lovelace = int(output.get("lovelace", 2_000_000))
+                assets_dict = output.get("assets")
+
+                if assets_dict:
+                    multi_asset = MultiAsset()
+                    for unit, qty in assets_dict.items():
+                        # unit = policyId (56 chars) + assetNameHex
+                        policy_hex = unit[:56]
+                        asset_hex = unit[56:]
+                        sh = ScriptHash.from_primitive(policy_hex)
+                        an = AssetName(bytes.fromhex(asset_hex)) if asset_hex else AssetName(b"")
+                        if sh not in multi_asset:
+                            multi_asset[sh] = Asset()
+                        multi_asset[sh][an] = int(qty)
+                    value = Value(lovelace, multi_asset)
+                else:
+                    value = lovelace
+
+                builder.add_output(TransactionOutput(addr, value))
+
+            if metadata:
+                from pycardano import AuxiliaryData, Metadata
+                aux = AuxiliaryData(data=Metadata(metadata))
+                builder.auxiliary_data = aux
+
+            if submit:
+                tx = builder.build_and_sign(
+                    signing_keys=[self._wallet.payment_signing_key],
+                    change_address=self._wallet.payment_address,
+                )
+                tx_cbor = tx.to_cbor()
+                if isinstance(tx_cbor, bytes):
+                    tx_cbor_hex = tx_cbor.hex()
+                else:
+                    tx_cbor_hex = tx_cbor
+                tx_hash = str(tx.id)
+
+                await self._context.async_submit_tx_cbor(tx_cbor_hex)
+                recipients = ", ".join(o["address"] for o in outputs)
+                self._safety.record_transaction(tx_hash, total_lovelace, recipients)
+
+                return BuildTxResult(
+                    tx_cbor="",
+                    tx_hash=tx_hash,
+                    fee_lovelace=tx.transaction_body.fee,
+                    fee_ada=_lovelace_to_ada(tx.transaction_body.fee),
+                    submitted=True,
+                    explorer_url=f"{self._explorer_url}/transaction/{tx_hash}",
+                )
+            else:
+                tx = builder.build(change_address=self._wallet.payment_address)
+                tx_cbor = tx.to_cbor()
+                if isinstance(tx_cbor, bytes):
+                    tx_cbor_hex = tx_cbor.hex()
+                else:
+                    tx_cbor_hex = tx_cbor
+                tx_hash = str(tx.id)
+
+                return BuildTxResult(
+                    tx_cbor=tx_cbor_hex,
+                    tx_hash=tx_hash,
+                    fee_lovelace=tx.transaction_body.fee,
+                    fee_ada=_lovelace_to_ada(tx.transaction_body.fee),
+                    submitted=False,
+                )
+        except Exception as e:
+            if "insufficient" in str(e).lower():
+                raise InsufficientFundsError(f"Insufficient funds: {e}") from e
+            raise TransactionError(f"Build transaction failed: {e}") from e
+
+    async def get_transaction_history(
+        self,
+        address: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[TxSummary]:
+        """Get transaction history via Koios.
+
+        Parameters
+        ----------
+        address: Address to query (default: own wallet)
+        limit: Max transactions to return (1-50)
+        offset: Pagination offset
+        """
+        addr = address or self.address
+        koios_url = self._koios_url.rstrip("/")
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Step 1: Get tx hashes
+            resp = await client.post(
+                f"{koios_url}/api/v1/address_txs",
+                json={"_addresses": [addr], "_after_block_height": 0},
+            )
+            resp.raise_for_status()
+            tx_list = resp.json()
+
+            # Paginate
+            paginated = tx_list[offset : offset + limit]
+            if not paginated:
+                return []
+
+            # Step 2: Get full tx info
+            tx_hashes = [tx["tx_hash"] for tx in paginated]
+            try:
+                info_resp = await client.post(
+                    f"{koios_url}/api/v1/tx_info",
+                    json={"_tx_hashes": tx_hashes},
+                )
+                info_resp.raise_for_status()
+                tx_infos = info_resp.json()
+
+                return [
+                    TxSummary(
+                        tx_hash=info["tx_hash"],
+                        block_height=info.get("block_height", 0),
+                        block_time=(
+                            str(info.get("tx_timestamp", info.get("block_time", "")))
+                        ),
+                        fee=str(info.get("fee", "0")),
+                    )
+                    for info in tx_infos
+                ]
+            except Exception:
+                # Fallback to basic info from address_txs
+                return [
+                    TxSummary(
+                        tx_hash=tx["tx_hash"],
+                        block_height=tx.get("block_height", 0),
+                        block_time=str(tx.get("block_time", "")),
+                        fee="0",
+                    )
+                    for tx in paginated
+                ]
+
+    async def deploy_contract(
+        self,
+        script_cbor: str,
+        script_type: str = "PlutusV2",
+        initial_datum: bytes | None = None,
+        lovelace: int = 2_000_000,
+    ) -> DeployContractResult:
+        """Deploy a Plutus/Aiken smart contract by locking funds at its script address.
+
+        Parameters
+        ----------
+        script_cbor: Compiled script CBOR hex
+        script_type: "PlutusV1", "PlutusV2", or "PlutusV3"
+        initial_datum: Optional datum bytes (CBOR). Defaults to void (Constr(0, []))
+        lovelace: ADA to lock in lovelace (default 2 ADA)
+        """
+        self._safety.enforce_transaction(lovelace)
+        await self._context.async_protocol_param()
+
+        # Parse script
+        script_bytes = bytes.fromhex(script_cbor)
+        if script_type == "PlutusV1":
+            script = PlutusV1Script(script_bytes)
+        else:
+            # PlutusV2 and PlutusV3 both use PlutusV2Script in pycardano
+            # (PlutusV3 is not yet separate in most pycardano versions)
+            script = PlutusV2Script(script_bytes)
+
+        script_hash_val = compute_script_hash(script)
+        script_address = Address(script_hash_val, network=self._context.network)
+
+        # Datum
+        if initial_datum:
+            import cbor2
+            datum = RawPlutusData(cbor2.loads(initial_datum))
+        else:
+            # Void datum: Constr(0, [])
+            from pycardano.plutus import PlutusData
+            datum = PlutusData()
+
+        try:
+            builder = TransactionBuilder(self._context)
+            builder.add_input_address(self._wallet.payment_address)
+            builder.add_output(
+                TransactionOutput(script_address, lovelace, datum=datum)
+            )
+
+            tx = builder.build_and_sign(
+                signing_keys=[self._wallet.payment_signing_key],
+                change_address=self._wallet.payment_address,
+            )
+
+            tx_cbor_out = tx.to_cbor()
+            if isinstance(tx_cbor_out, bytes):
+                tx_cbor_hex = tx_cbor_out.hex()
+            else:
+                tx_cbor_hex = tx_cbor_out
+            tx_hash = str(tx.id)
+
+            await self._context.async_submit_tx_cbor(tx_cbor_hex)
+            self._safety.record_transaction(tx_hash, lovelace, str(script_address))
+
+            return DeployContractResult(
+                tx_hash=tx_hash,
+                sender=self.address,
+                recipient=str(script_address),
+                amount_lovelace=lovelace,
+                explorer_url=f"{self._explorer_url}/transaction/{tx_hash}",
+                script_address=str(script_address),
+                script_hash=str(script_hash_val),
+                script_type=script_type,
+            )
+        except Exception as e:
+            if "insufficient" in str(e).lower():
+                raise InsufficientFundsError(f"Insufficient funds: {e}") from e
+            raise TransactionError(f"Deploy contract failed: {e}") from e
+
+    async def interact_contract(
+        self,
+        script_cbor: str,
+        script_type: str = "PlutusV2",
+        action: str = "spend",
+        redeemer: bytes | None = None,
+        datum: bytes | None = None,
+        lovelace: int = 2_000_000,
+        utxo_ref: dict | None = None,
+    ) -> InteractContractResult:
+        """Interact with a deployed smart contract.
+
+        Parameters
+        ----------
+        script_cbor: Compiled script CBOR hex
+        script_type: "PlutusV1", "PlutusV2", or "PlutusV3"
+        action: "spend" to collect from script, "lock" to send funds to it
+        redeemer: Redeemer bytes (CBOR, for spend). Defaults to void.
+        datum: Datum bytes (CBOR, for lock). Defaults to void.
+        lovelace: ADA amount in lovelace (for lock)
+        utxo_ref: Optional {"tx_hash": "...", "output_index": N} for specific UTxO
+        """
+        await self._context.async_protocol_param()
+
+        script_bytes = bytes.fromhex(script_cbor)
+        if script_type == "PlutusV1":
+            script = PlutusV1Script(script_bytes)
+        else:
+            script = PlutusV2Script(script_bytes)
+
+        script_hash_val = compute_script_hash(script)
+        script_address = Address(script_hash_val, network=self._context.network)
+
+        if action == "lock":
+            self._safety.enforce_transaction(lovelace)
+
+            if datum:
+                import cbor2
+                datum_obj = RawPlutusData(cbor2.loads(datum))
+            else:
+                from pycardano.plutus import PlutusData
+                datum_obj = PlutusData()
+
+            try:
+                builder = TransactionBuilder(self._context)
+                builder.add_input_address(self._wallet.payment_address)
+                builder.add_output(
+                    TransactionOutput(script_address, lovelace, datum=datum_obj)
+                )
+
+                tx = builder.build_and_sign(
+                    signing_keys=[self._wallet.payment_signing_key],
+                    change_address=self._wallet.payment_address,
+                )
+                tx_cbor_out = tx.to_cbor()
+                if isinstance(tx_cbor_out, bytes):
+                    tx_cbor_hex = tx_cbor_out.hex()
+                else:
+                    tx_cbor_hex = tx_cbor_out
+                tx_hash = str(tx.id)
+
+                await self._context.async_submit_tx_cbor(tx_cbor_hex)
+                self._safety.record_transaction(tx_hash, lovelace, str(script_address))
+
+                return InteractContractResult(
+                    tx_hash=tx_hash,
+                    sender=self.address,
+                    recipient=str(script_address),
+                    amount_lovelace=lovelace,
+                    explorer_url=f"{self._explorer_url}/transaction/{tx_hash}",
+                    script_address=str(script_address),
+                    action="lock",
+                )
+            except Exception as e:
+                if "insufficient" in str(e).lower():
+                    raise InsufficientFundsError(f"Insufficient funds: {e}") from e
+                raise TransactionError(f"Lock to contract failed: {e}") from e
+
+        else:
+            # SPEND: collect from script
+            if redeemer:
+                import cbor2
+                redeemer_obj = RawPlutusData(cbor2.loads(redeemer))
+            else:
+                from pycardano.plutus import PlutusData
+                redeemer_obj = PlutusData()
+
+            # Find UTxOs at script address
+            script_utxos = await self._context.async_utxos(str(script_address))
+
+            if utxo_ref:
+                # Filter to specific UTxO
+                target_hash = utxo_ref["tx_hash"]
+                target_idx = utxo_ref["output_index"]
+                script_utxos = [
+                    u for u in script_utxos
+                    if str(u.input.transaction_id) == target_hash
+                    and u.input.index == target_idx
+                ]
+
+            if not script_utxos:
+                raise TransactionError(f"No UTxOs found at script address {script_address}")
+
+            try:
+                from pycardano import Redeemer
+                builder = TransactionBuilder(self._context)
+                builder.add_input_address(self._wallet.payment_address)
+
+                for utxo in script_utxos:
+                    builder.add_script_input(
+                        utxo,
+                        script=script,
+                        datum=utxo.output.datum,
+                        redeemer=Redeemer(redeemer_obj),
+                    )
+
+                builder.required_signers = [self._wallet.payment_verification_key.hash()]
+
+                tx = builder.build_and_sign(
+                    signing_keys=[self._wallet.payment_signing_key],
+                    change_address=self._wallet.payment_address,
+                )
+                tx_cbor_out = tx.to_cbor()
+                if isinstance(tx_cbor_out, bytes):
+                    tx_cbor_hex = tx_cbor_out.hex()
+                else:
+                    tx_cbor_hex = tx_cbor_out
+                tx_hash = str(tx.id)
+
+                await self._context.async_submit_tx_cbor(tx_cbor_hex)
+
+                return InteractContractResult(
+                    tx_hash=tx_hash,
+                    sender=str(script_address),
+                    recipient=self.address,
+                    amount_lovelace=0,
+                    explorer_url=f"{self._explorer_url}/transaction/{tx_hash}",
+                    script_address=str(script_address),
+                    action="spend",
+                )
+            except Exception as e:
+                if "insufficient" in str(e).lower():
+                    raise InsufficientFundsError(f"Insufficient funds: {e}") from e
+                raise TransactionError(f"Spend from contract failed: {e}") from e
 
     # ------------------------------------------------------------------
     # Lifecycle
