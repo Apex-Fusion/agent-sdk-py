@@ -1,10 +1,15 @@
 [project]
-name = "vector-agent-sdk"
+name = "apex-fusion-agent-sdk"
 version = "0.1.0"
 description = "Python Agent SDK for Vector blockchain — PyCardano + Ogmios"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+authors = [{ name = "dcejtlin-apex", email = "david.cejtlin@hal8.io" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
 dependencies = [
     "pycardano>=0.12.0",
     "httpx>=0.27.0",
@@ -12,6 +17,10 @@ dependencies = [
     "mcp>=1.0.0",
     "python-dotenv>=1.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Apex-Fusion/agent-sdk-py"
+Repository = "https://github.com/Apex-Fusion/agent-sdk-py"
 
 [project.optional-dependencies]
 dev = [
@@ -25,7 +34,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/vector_agent"]
+packages = ["src/agent-sdk"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
