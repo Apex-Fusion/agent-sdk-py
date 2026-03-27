@@ -29,6 +29,8 @@ from vector_agent.types import (
     VectorBalance,
 )
 
+from vector_agent import governance as governance  # noqa: F401 — Game 6
+
 __version__ = "0.1.0"
 
 __all__ = [
