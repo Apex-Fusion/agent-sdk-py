@@ -2,7 +2,7 @@
 
 Two modes of operation:
 - ``VectorAgent``: Standalone mode (direct PyCardano + Ogmios)
-- ``VectorAgentMCP``: MCP client mode (connects to TypeScript MCP server)
+- ``VectorAgentMCP``: MCP client mode (SSE to hosted server, or stdio to local subprocess)
 """
 
 from vector_agent.agent import VectorAgent

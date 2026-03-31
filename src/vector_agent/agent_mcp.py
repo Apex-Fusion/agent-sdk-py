@@ -1,4 +1,4 @@
-"""VectorAgentMCP — MCP client mode that connects to the TypeScript MCP server."""
+"""VectorAgentMCP — MCP client mode (SSE to hosted server, or stdio to local subprocess)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import os
 from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
+from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
 
 from vector_agent.exceptions import TransactionError, VectorError
@@ -28,31 +29,41 @@ def _env(key: str, default: str | None = None) -> str | None:
 
 
 class VectorAgentMCP:
-    """Vector agent that delegates to the TypeScript MCP server.
+    """Vector agent that delegates to an MCP server.
 
-    Spawns the MCP server as a subprocess and communicates via stdio.
+    Connects via SSE (hosted) or stdio (local subprocess).
 
     Usage::
 
-        async with VectorAgentMCP() as agent:
+        # SSE — hosted server (preferred)
+        async with VectorAgentMCP(server_url="https://mcp.vector.testnet.apexfusion.org/sse") as agent:
             balance = await agent.get_balance()
-            tx = await agent.send(to="addr1...", ada=5.0)
+
+        # stdio — local subprocess (fallback)
+        async with VectorAgentMCP(server_command="node", server_args=["build/index.js"]) as agent:
+            balance = await agent.get_balance()
     """
 
     def __init__(
         self,
+        server_url: str | None = None,
+        server_headers: dict[str, str] | None = None,
         server_command: str | None = None,
         server_args: list[str] | None = None,
         server_env: dict[str, str] | None = None,
         working_dir: str | None = None,
     ):
+        self._server_url = server_url or _env("VECTOR_MCP_URL")
+        self._server_headers = server_headers
+        self._use_sse = self._server_url is not None
+
         self._server_command = server_command or _env("VECTOR_MCP_COMMAND", "node")
         self._server_args = server_args or self._default_server_args()
         self._server_env = server_env
         self._working_dir = working_dir
 
         self._session: ClientSession | None = None
-        self._stdio_context = None
+        self._transport_context = None
         self._session_context = None
 
     def _default_server_args(self) -> list[str]:
@@ -63,16 +74,22 @@ class VectorAgentMCP:
         return ["build/index.js"]
 
     async def connect(self):
-        """Spawn the TypeScript MCP server and establish a session."""
-        server_params = StdioServerParameters(
-            command=self._server_command,
-            args=self._server_args,
-            env=self._server_env,
-            cwd=self._working_dir,
-        )
+        """Connect to the MCP server (SSE if URL provided, stdio otherwise)."""
+        if self._use_sse:
+            self._transport_context = sse_client(
+                url=self._server_url,
+                headers=self._server_headers,
+            )
+        else:
+            server_params = StdioServerParameters(
+                command=self._server_command,
+                args=self._server_args,
+                env=self._server_env,
+                cwd=self._working_dir,
+            )
+            self._transport_context = stdio_client(server_params)
 
-        self._stdio_context = stdio_client(server_params)
-        read_stream, write_stream = await self._stdio_context.__aenter__()
+        read_stream, write_stream = await self._transport_context.__aenter__()
 
         self._session_context = ClientSession(read_stream, write_stream)
         self._session = await self._session_context.__aenter__()
@@ -390,12 +407,12 @@ class VectorAgentMCP:
     # ------------------------------------------------------------------
 
     async def close(self):
-        """Shut down the MCP session and server process."""
+        """Shut down the MCP session and transport."""
         if self._session_context:
             await self._session_context.__aexit__(None, None, None)
             self._session = None
-        if self._stdio_context:
-            await self._stdio_context.__aexit__(None, None, None)
+        if self._transport_context:
+            await self._transport_context.__aexit__(None, None, None)
 
     async def __aenter__(self):
         await self.connect()
