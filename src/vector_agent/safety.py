@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from vector_agent.exceptions import SpendLimitExceededError
 from vector_agent.types import AuditEntry, SpendStatus
@@ -87,7 +87,7 @@ class SafetyLayer:
         now = datetime.now(timezone.utc)
         reset = now.replace(hour=0, minute=0, second=0, microsecond=0)
         if reset <= now:
-            reset = reset.replace(day=reset.day + 1)
+            reset += timedelta(days=1)
         return SpendStatus(
             per_transaction_limit=self.per_tx_limit,
             daily_limit=self.daily_limit,
