@@ -30,9 +30,13 @@ from vector_agent.chain.submit import SubmitClient
 def _run_sync(coro):
     """Run an async coroutine from synchronous code.
 
-    If there is already a running event loop (e.g. inside a Jupyter notebook or
-    an async framework), we create a new thread to avoid "cannot run nested
-    event loop" errors.  Otherwise we just use ``asyncio.run()``.
+    If there is already a running event loop (e.g. PyCardano's
+    TransactionBuilder calling context.utxos() from inside an async
+    function), we create a new thread with its own event loop.  httpx
+    clients bound to the original loop cannot be reused, so the
+    coroutine must create fresh clients as needed.
+
+    Otherwise we just use ``asyncio.run()``.
     """
     try:
         loop = asyncio.get_running_loop()
@@ -40,7 +44,6 @@ def _run_sync(coro):
         loop = None
 
     if loop is not None and loop.is_running():
-        # We are inside an existing event loop -- run in a fresh thread.
         import concurrent.futures
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:

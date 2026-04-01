@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 
 import httpx
@@ -17,8 +18,14 @@ class SubmitClient:
         self._client: httpx.AsyncClient | None = None
 
     async def _ensure_client(self) -> httpx.AsyncClient:
+        current_loop = asyncio.get_running_loop()
+        if self._client is not None and not self._client.is_closed:
+            if getattr(self, "_client_loop", None) is not current_loop:
+                await self._client.aclose()
+                self._client = None
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(timeout=30.0)
+            self._client_loop = current_loop
         return self._client
 
     async def submit(self, tx_cbor_hex: str) -> str:

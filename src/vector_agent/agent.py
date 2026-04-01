@@ -892,8 +892,14 @@ class VectorAgent:
 
     async def close(self):
         """Close underlying HTTP connections."""
-        await self._ogmios.close()
-        await self._submit.close()
+        try:
+            await self._ogmios.close()
+        except RuntimeError:
+            pass  # Event loop already closed
+        try:
+            await self._submit.close()
+        except RuntimeError:
+            pass  # Event loop already closed
 
     async def __aenter__(self):
         return self

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 
 from vector_agent.exceptions import ConnectionError
@@ -15,8 +17,17 @@ class OgmiosClient:
         self._client: httpx.AsyncClient | None = None
 
     async def _ensure_client(self) -> httpx.AsyncClient:
+        # Create a fresh client when the event loop has changed (happens
+        # when PyCardano's sync TransactionBuilder calls context.utxos()
+        # from a worker thread with its own event loop).
+        current_loop = asyncio.get_running_loop()
+        if self._client is not None and not self._client.is_closed:
+            if getattr(self, "_client_loop", None) is not current_loop:
+                await self._client.aclose()
+                self._client = None
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(timeout=30.0)
+            self._client_loop = current_loop
         return self._client
 
     async def _rpc(self, method: str, params: dict | None = None) -> dict:
