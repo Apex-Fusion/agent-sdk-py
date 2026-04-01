@@ -334,6 +334,7 @@ class VectorAgentMCP:
         script_type: str = "PlutusV2",
         initial_datum: str | None = None,
         lovelace: int = 2_000_000,
+        as_reference_script: bool = False,
     ) -> DeployContractResult:
         """Deploy a smart contract via MCP."""
         args: dict[str, Any] = {
@@ -344,10 +345,13 @@ class VectorAgentMCP:
             args["initialDatum"] = initial_datum
         if lovelace != 2_000_000:
             args["lovelaceAmount"] = lovelace
+        if as_reference_script:
+            args["asReferenceScript"] = True
 
         result = await self._call_tool("vector_deploy_contract", args)
 
         if isinstance(result, dict):
+            ref_utxo = result.get("referenceUtxo", result.get("reference_utxo"))
             return DeployContractResult(
                 tx_hash=result.get("txHash", result.get("tx_hash", "")),
                 sender="",
@@ -357,25 +361,31 @@ class VectorAgentMCP:
                 script_address=result.get("scriptAddress", result.get("script_address", "")),
                 script_hash=result.get("scriptHash", result.get("script_hash", "")),
                 script_type=result.get("scriptType", result.get("script_type", script_type)),
+                reference_utxo=ref_utxo,
             )
         raise TransactionError(f"Unexpected deploy response: {result}")
 
     async def interact_contract(
         self,
-        script_cbor: str,
+        script_cbor: str | None = None,
+        script_hash: str | None = None,
         script_type: str = "PlutusV2",
         action: str = "spend",
         redeemer: str | None = None,
         datum: str | None = None,
         lovelace: int = 2_000_000,
         utxo_ref: dict | None = None,
+        reference_utxo: dict | None = None,
     ) -> InteractContractResult:
         """Interact with a smart contract via MCP."""
         args: dict[str, Any] = {
-            "scriptCbor": script_cbor,
             "scriptType": script_type,
             "action": action,
         }
+        if script_cbor:
+            args["scriptCbor"] = script_cbor
+        if script_hash:
+            args["scriptHash"] = script_hash
         if redeemer:
             args["redeemer"] = redeemer
         if datum:
@@ -386,6 +396,11 @@ class VectorAgentMCP:
             args["utxoRef"] = {
                 "txHash": utxo_ref.get("tx_hash", utxo_ref.get("txHash", "")),
                 "outputIndex": utxo_ref.get("output_index", utxo_ref.get("outputIndex", 0)),
+            }
+        if reference_utxo:
+            args["referenceUtxo"] = {
+                "txHash": reference_utxo.get("tx_hash", reference_utxo.get("txHash", "")),
+                "outputIndex": reference_utxo.get("output_index", reference_utxo.get("outputIndex", 0)),
             }
 
         result = await self._call_tool("vector_interact_contract", args)

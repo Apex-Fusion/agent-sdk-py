@@ -97,6 +97,7 @@ class DeployContractResult(TxResult):
     script_address: str
     script_hash: str
     script_type: str
+    reference_utxo: dict | None = None
 
 
 class InteractContractResult(TxResult):

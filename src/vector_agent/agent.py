@@ -9,7 +9,7 @@ import httpx
 from pycardano import TransactionBuilder, TransactionOutput
 from pycardano.address import Address
 from pycardano.hash import ScriptHash
-from pycardano.plutus import PlutusV1Script, PlutusV2Script, PlutusData, RawPlutusData, script_hash as compute_script_hash
+from pycardano.plutus import PlutusV1Script, PlutusV2Script, PlutusV3Script, PlutusData, RawPlutusData, script_hash as compute_script_hash
 from pycardano.transaction import Asset, AssetName, MultiAsset, TransactionInput, Value
 
 from vector_agent.chain.context import VectorChainContext
@@ -595,12 +595,26 @@ class VectorAgent:
                     for tx in paginated
                 ]
 
+    @staticmethod
+    def _parse_script(script_cbor: str, script_type: str):
+        """Parse compiled script CBOR hex into a PyCardano script object."""
+        script_bytes = bytes.fromhex(script_cbor)
+        if script_type == "PlutusV1":
+            return PlutusV1Script(script_bytes)
+        elif script_type == "PlutusV2":
+            return PlutusV2Script(script_bytes)
+        elif script_type == "PlutusV3":
+            return PlutusV3Script(script_bytes)
+        else:
+            raise ValueError(f"Unknown script_type: {script_type!r}")
+
     async def deploy_contract(
         self,
         script_cbor: str,
         script_type: str = "PlutusV2",
         initial_datum: bytes | None = None,
         lovelace: int = 2_000_000,
+        as_reference_script: bool = False,
     ) -> DeployContractResult:
         """Deploy a Plutus/Aiken smart contract by locking funds at its script address.
 
@@ -610,19 +624,13 @@ class VectorAgent:
         script_type: "PlutusV1", "PlutusV2", or "PlutusV3"
         initial_datum: Optional datum bytes (CBOR). Defaults to void (Constr(0, []))
         lovelace: ADA to lock in lovelace (default 2 ADA)
+        as_reference_script: If True, attach the script to the output UTxO so it
+            can be used as a CIP-33 reference script in future transactions.
         """
         self._safety.enforce_transaction(lovelace)
         await self._context.async_protocol_param()
 
-        # Parse script
-        script_bytes = bytes.fromhex(script_cbor)
-        if script_type == "PlutusV1":
-            script = PlutusV1Script(script_bytes)
-        else:
-            # PlutusV2 and PlutusV3 both use PlutusV2Script in pycardano
-            # (PlutusV3 is not yet separate in most pycardano versions)
-            script = PlutusV2Script(script_bytes)
-
+        script = self._parse_script(script_cbor, script_type)
         script_hash_val = compute_script_hash(script)
         script_address = Address(script_hash_val, network=self._context.network)
 
@@ -631,15 +639,18 @@ class VectorAgent:
             import cbor2
             datum = RawPlutusData(cbor2.loads(initial_datum))
         else:
-            # Void datum: Constr(0, [])
-            from pycardano.plutus import PlutusData
             datum = PlutusData()
 
         try:
             builder = TransactionBuilder(self._context)
             builder.add_input_address(self._wallet.payment_address)
+
+            output_kwargs = {"datum": datum}
+            if as_reference_script:
+                output_kwargs["script"] = script
+
             builder.add_output(
-                TransactionOutput(script_address, lovelace, datum=datum)
+                TransactionOutput(script_address, lovelace, **output_kwargs)
             )
 
             tx = builder.build_and_sign(
@@ -657,6 +668,10 @@ class VectorAgent:
             await self._context.async_submit_tx_cbor(tx_cbor_hex)
             self._safety.record_transaction(tx_hash, lovelace, str(script_address))
 
+            ref_utxo = None
+            if as_reference_script:
+                ref_utxo = {"tx_hash": tx_hash, "output_index": 0}
+
             return DeployContractResult(
                 tx_hash=tx_hash,
                 sender=self.address,
@@ -666,6 +681,7 @@ class VectorAgent:
                 script_address=str(script_address),
                 script_hash=str(script_hash_val),
                 script_type=script_type,
+                reference_utxo=ref_utxo,
             )
         except Exception as e:
             if "insufficient" in str(e).lower():
@@ -674,35 +690,59 @@ class VectorAgent:
 
     async def interact_contract(
         self,
-        script_cbor: str,
+        script_cbor: str | None = None,
+        script_hash: str | None = None,
         script_type: str = "PlutusV2",
         action: str = "spend",
         redeemer: bytes | None = None,
         datum: bytes | None = None,
         lovelace: int = 2_000_000,
         utxo_ref: dict | None = None,
+        reference_utxo: dict | None = None,
     ) -> InteractContractResult:
         """Interact with a deployed smart contract.
 
+        Provide either ``script_cbor`` (embeds the script in the transaction)
+        or ``script_hash`` (derives the address from the hash).  When spending
+        with a ``reference_utxo``, the script is read from that on-chain UTxO
+        instead of being included in the transaction witness set (CIP-33),
+        significantly reducing transaction size and fees.
+
         Parameters
         ----------
-        script_cbor: Compiled script CBOR hex
+        script_cbor: Compiled script CBOR hex.  Mutually exclusive with
+            *script_hash*.
+        script_hash: Hex-encoded script hash.  Mutually exclusive with
+            *script_cbor*.  For spend actions, *reference_utxo* is required
+            when using this parameter.
         script_type: "PlutusV1", "PlutusV2", or "PlutusV3"
         action: "spend" to collect from script, "lock" to send funds to it
         redeemer: Redeemer bytes (CBOR, for spend). Defaults to void.
         datum: Datum bytes (CBOR, for lock). Defaults to void.
         lovelace: ADA amount in lovelace (for lock)
         utxo_ref: Optional {"tx_hash": "...", "output_index": N} for specific UTxO
+        reference_utxo: Optional {"tx_hash": "...", "output_index": N} pointing
+            to a UTxO that holds the script as a CIP-33 reference script.
         """
+        if script_cbor is not None and script_hash is not None:
+            raise ValueError("Provide either script_cbor or script_hash, not both")
+        if script_cbor is None and script_hash is None:
+            raise ValueError("Must provide either script_cbor or script_hash")
+        if script_hash is not None and action == "spend" and reference_utxo is None:
+            raise ValueError(
+                "reference_utxo is required for spend actions when using script_hash"
+            )
+
         await self._context.async_protocol_param()
 
-        script_bytes = bytes.fromhex(script_cbor)
-        if script_type == "PlutusV1":
-            script = PlutusV1Script(script_bytes)
+        # Derive script object and address
+        if script_cbor is not None:
+            script = self._parse_script(script_cbor, script_type)
+            script_hash_val = compute_script_hash(script)
         else:
-            script = PlutusV2Script(script_bytes)
+            script = None
+            script_hash_val = ScriptHash.from_primitive(bytes.fromhex(script_hash))
 
-        script_hash_val = compute_script_hash(script)
         script_address = Address(script_hash_val, network=self._context.network)
 
         if action == "lock":
@@ -712,7 +752,6 @@ class VectorAgent:
                 import cbor2
                 datum_obj = RawPlutusData(cbor2.loads(datum))
             else:
-                from pycardano.plutus import PlutusData
                 datum_obj = PlutusData()
 
             try:
@@ -756,20 +795,47 @@ class VectorAgent:
                 import cbor2
                 redeemer_obj = RawPlutusData(cbor2.loads(redeemer))
             else:
-                from pycardano.plutus import PlutusData
                 redeemer_obj = PlutusData()
 
-            # Find UTxOs at script address
-            script_utxos = await self._context.async_utxos(str(script_address))
+            # Fetch all UTxOs at script address (single network call)
+            all_utxos = await self._context.async_utxos(str(script_address))
+
+            # Resolve reference script UTxO if provided
+            ref_utxo_obj = None
+            if reference_utxo:
+                ref_hash = reference_utxo["tx_hash"]
+                ref_idx = reference_utxo["output_index"]
+                for u in all_utxos:
+                    if (
+                        str(u.input.transaction_id) == ref_hash
+                        and u.input.index == ref_idx
+                    ):
+                        ref_utxo_obj = u
+                        break
+                if ref_utxo_obj is None:
+                    raise TransactionError(
+                        f"Reference UTxO {ref_hash}#{ref_idx} not found"
+                    )
+
+            script_utxos = list(all_utxos)
 
             if utxo_ref:
-                # Filter to specific UTxO
                 target_hash = utxo_ref["tx_hash"]
                 target_idx = utxo_ref["output_index"]
                 script_utxos = [
                     u for u in script_utxos
                     if str(u.input.transaction_id) == target_hash
                     and u.input.index == target_idx
+                ]
+
+            # Exclude the reference UTxO from spending inputs
+            if ref_utxo_obj is not None:
+                script_utxos = [
+                    u for u in script_utxos
+                    if not (
+                        u.input.transaction_id == ref_utxo_obj.input.transaction_id
+                        and u.input.index == ref_utxo_obj.input.index
+                    )
                 ]
 
             if not script_utxos:
@@ -780,10 +846,13 @@ class VectorAgent:
                 builder = TransactionBuilder(self._context)
                 builder.add_input_address(self._wallet.payment_address)
 
+                # Use reference script (CIP-33) or embedded script
+                script_arg = ref_utxo_obj if ref_utxo_obj is not None else script
+
                 for utxo in script_utxos:
                     builder.add_script_input(
                         utxo,
-                        script=script,
+                        script=script_arg,
                         datum=utxo.output.datum,
                         redeemer=Redeemer(redeemer_obj),
                     )

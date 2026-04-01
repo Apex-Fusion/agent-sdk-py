@@ -1,15 +1,20 @@
 """GovernanceClient — high-level interface for governance actions.
 
-Works with deployed contracts via their script hashes. Configure via
+Works with deployed contracts via their compiled script CBOR. Configure via
 constructor args or environment variables.
+
+When reference UTxOs are provided (via constructor or
+:meth:`set_reference_utxos`), spend transactions use CIP-33 reference
+scripts instead of embedding the full script in every transaction, reducing
+size and fees by ~85%.
 """
 
 import os
 
 import cbor2
 from pycardano import Address, Network
-from pycardano.hash import ScriptHash as PyScriptHash
-from pycardano.plutus import PlutusData, RawPlutusData
+from pycardano.plutus import PlutusData, PlutusV3Script, RawPlutusData
+from pycardano.plutus import script_hash as compute_script_hash
 
 from vector_agent.agent import VectorAgent
 from vector_agent.governance.types import (
@@ -27,15 +32,21 @@ from vector_agent.governance.datums import (
 class GovernanceClient:
     """High-level client for governance interactions on Vector.
 
-    Script hashes can be passed directly or read from environment variables:
-    ``GOVERNANCE_PROPOSAL_HASH``, ``GOVERNANCE_CRITIQUE_HASH``,
-    ``GOVERNANCE_ENDORSEMENT_HASH``.
+    Compiled script CBOR can be passed directly or read from environment
+    variables: ``GOVERNANCE_PROPOSAL_CBOR``, ``GOVERNANCE_CRITIQUE_CBOR``,
+    ``GOVERNANCE_ENDORSEMENT_CBOR``.
+
+    When *reference_utxos* are supplied, spend transactions use CIP-33
+    reference scripts for lower fees.  Reference UTxOs can also be set
+    later via :meth:`set_reference_utxos`.
 
     Args:
         agent: A connected VectorAgent instance.
-        proposal_script_hash: Script hash of the proposal validator.
-        critique_script_hash: Script hash of the critique validator.
-        endorsement_script_hash: Script hash of the endorsement validator.
+        proposal_script_cbor: Compiled CBOR hex of the proposal spend validator.
+        critique_script_cbor: Compiled CBOR hex of the critique spend validator.
+        endorsement_script_cbor: Compiled CBOR hex of the endorsement spend validator.
+        reference_utxos: Optional dict mapping script names to UTxO refs, e.g.
+            ``{"proposal": {"tx_hash": "ab..", "output_index": 0}, ...}``.
 
     Example::
 
@@ -43,36 +54,66 @@ class GovernanceClient:
         from vector_agent.governance import GovernanceClient
 
         async with VectorAgent() as agent:
-            gov = GovernanceClient(agent)  # reads hashes from env
+            gov = GovernanceClient(
+                agent,
+                proposal_script_cbor="59...",
+                critique_script_cbor="59...",
+                endorsement_script_cbor="59...",
+            )
             result = await gov.submit_proposal(...)
     """
 
     def __init__(
         self,
         agent: VectorAgent,
-        proposal_script_hash: str | None = None,
-        critique_script_hash: str | None = None,
-        endorsement_script_hash: str | None = None,
+        proposal_script_cbor: str | None = None,
+        critique_script_cbor: str | None = None,
+        endorsement_script_cbor: str | None = None,
+        reference_utxos: dict | None = None,
     ):
         self.agent = agent
-        self.proposal_hash = (
-            proposal_script_hash
-            or os.environ.get("GOVERNANCE_PROPOSAL_HASH", "")
+        self.proposal_cbor = (
+            proposal_script_cbor
+            or os.environ.get("GOVERNANCE_PROPOSAL_CBOR", "")
         )
-        self.critique_hash = (
-            critique_script_hash
-            or os.environ.get("GOVERNANCE_CRITIQUE_HASH", "")
+        self.critique_cbor = (
+            critique_script_cbor
+            or os.environ.get("GOVERNANCE_CRITIQUE_CBOR", "")
         )
-        self.endorsement_hash = (
-            endorsement_script_hash
-            or os.environ.get("GOVERNANCE_ENDORSEMENT_HASH", "")
+        self.endorsement_cbor = (
+            endorsement_script_cbor
+            or os.environ.get("GOVERNANCE_ENDORSEMENT_CBOR", "")
         )
 
-    def _script_address(self, script_hash: str) -> str:
-        addr = Address(
-            payment_part=PyScriptHash(bytes.fromhex(script_hash)),
-            network=Network.MAINNET,
-        )
+        # Precompute script hashes for use with reference scripts
+        self._script_hashes: dict[str, str] = {}
+        for name, cbor_hex in [
+            ("proposal", self.proposal_cbor),
+            ("critique", self.critique_cbor),
+            ("endorsement", self.endorsement_cbor),
+        ]:
+            if cbor_hex:
+                script = PlutusV3Script(bytes.fromhex(cbor_hex))
+                self._script_hashes[name] = str(compute_script_hash(script))
+
+        # Reference UTxOs for CIP-33 reference script spending
+        self._reference_utxos: dict[str, dict] = reference_utxos or {}
+
+    def set_reference_utxos(self, reference_utxos: dict) -> None:
+        """Update reference UTxO mappings after deployment.
+
+        Args:
+            reference_utxos: Dict mapping script names ("proposal",
+                "critique", "endorsement") to UTxO refs
+                ``{"tx_hash": "...", "output_index": N}``.
+        """
+        self._reference_utxos.update(reference_utxos)
+
+    def _script_address(self, script_cbor: str) -> str:
+        """Derive a bech32 script address from compiled CBOR hex."""
+        script = PlutusV3Script(bytes.fromhex(script_cbor))
+        script_hash = compute_script_hash(script)
+        addr = Address(payment_part=script_hash, network=Network.MAINNET)
         return str(addr)
 
     # ========================================================================
@@ -82,7 +123,7 @@ class GovernanceClient:
     async def get_proposals(self) -> list:
         """Query all proposal UTXOs at the proposal validator address."""
         return await self.agent.get_utxos(
-            self._script_address(self.proposal_hash)
+            self._script_address(self.proposal_cbor)
         )
 
     async def get_balance(self) -> dict:
@@ -145,10 +186,8 @@ class GovernanceClient:
             priority=priority,
         )
 
-        script_address = self._script_address(self.proposal_hash)
-
         result = await self.agent.interact_contract(
-            script_address=script_address,
+            script_cbor=self.proposal_cbor,
             script_type="PlutusV3",
             action="lock",
             datum=cbor2.dumps(datum.data),
@@ -157,14 +196,14 @@ class GovernanceClient:
 
         return {
             "tx_hash": result.tx_hash,
-            "script_address": script_address,
+            "script_address": self._script_address(self.proposal_cbor),
             "stake": stake_lovelace,
         }
 
     async def withdraw_proposal(self, utxo_ref: dict) -> dict:
         """Withdraw a proposal (proposer only). Stake is returned."""
         return await self._spend_at(
-            self.proposal_hash, ProposalAction.WITHDRAW, utxo_ref
+            self.proposal_cbor, ProposalAction.WITHDRAW, utxo_ref
         )
 
     async def amend_proposal(
@@ -194,18 +233,18 @@ class GovernanceClient:
         redeemer = ProposalAction.amend(
             new_proposal_hash, new_storage_uri, cbor_refs
         )
-        return await self._spend_at(self.proposal_hash, redeemer, utxo_ref)
+        return await self._spend_at(self.proposal_cbor, redeemer, utxo_ref)
 
     async def expire_proposal(self, utxo_ref: dict) -> dict:
         """Expire a proposal after review window (callable by anyone)."""
         return await self._spend_at(
-            self.proposal_hash, ProposalAction.EXPIRE, utxo_ref
+            self.proposal_cbor, ProposalAction.EXPIRE, utxo_ref
         )
 
     async def expire_stale_proposal(self, utxo_ref: dict) -> dict:
         """Expire a stale ParameterChange proposal (callable by anyone)."""
         return await self._spend_at(
-            self.proposal_hash, ProposalAction.EXPIRE_STALE, utxo_ref
+            self.proposal_cbor, ProposalAction.EXPIRE_STALE, utxo_ref
         )
 
     # ========================================================================
@@ -226,7 +265,7 @@ class GovernanceClient:
             reward_amount: AP3X reward in lovelace.
         """
         redeemer = ProposalAction.adopt(reasoning_hash, reward_amount)
-        result = await self._spend_at(self.proposal_hash, redeemer, utxo_ref)
+        result = await self._spend_at(self.proposal_cbor, redeemer, utxo_ref)
         result["reward"] = reward_amount
         return result
 
@@ -235,7 +274,7 @@ class GovernanceClient:
     ) -> dict:
         """Foundation rejects a proposal (oracle action)."""
         return await self._spend_at(
-            self.proposal_hash,
+            self.proposal_cbor,
             ProposalAction.reject(reasoning_hash),
             utxo_ref,
         )
@@ -245,7 +284,7 @@ class GovernanceClient:
     ) -> dict:
         """Foundation extends the review window (oracle action)."""
         return await self._spend_at(
-            self.proposal_hash,
+            self.proposal_cbor,
             ProposalAction.extend_review(additional_slots),
             utxo_ref,
         )
@@ -292,10 +331,8 @@ class GovernanceClient:
             submitted_at=0,
         )
 
-        script_address = self._script_address(self.critique_hash)
-
         result = await self.agent.interact_contract(
-            script_address=script_address,
+            script_cbor=self.critique_cbor,
             script_type="PlutusV3",
             action="lock",
             datum=cbor2.dumps(datum.data),
@@ -304,14 +341,14 @@ class GovernanceClient:
 
         return {
             "tx_hash": result.tx_hash,
-            "script_address": script_address,
+            "script_address": self._script_address(self.critique_cbor),
             "stake": stake_lovelace,
         }
 
     async def withdraw_critique(self, utxo_ref: dict) -> dict:
         """Withdraw a critique (critic only). Stake returned."""
         return await self._spend_at(
-            self.critique_hash, CritiqueAction.WITHDRAW, utxo_ref
+            self.critique_cbor, CritiqueAction.WITHDRAW, utxo_ref
         )
 
     # ========================================================================
@@ -337,10 +374,8 @@ class GovernanceClient:
             created_at=0,
         )
 
-        script_address = self._script_address(self.endorsement_hash)
-
         result = await self.agent.interact_contract(
-            script_address=script_address,
+            script_cbor=self.endorsement_cbor,
             script_type="PlutusV3",
             action="lock",
             datum=cbor2.dumps(datum.data),
@@ -349,28 +384,54 @@ class GovernanceClient:
 
         return {
             "tx_hash": result.tx_hash,
-            "script_address": script_address,
+            "script_address": self._script_address(self.endorsement_cbor),
             "stake": stake_lovelace,
         }
 
     async def withdraw_endorsement(self, utxo_ref: dict) -> dict:
         """Withdraw an endorsement (anytime)."""
         return await self._spend_at(
-            self.endorsement_hash, EndorsementAction.WITHDRAW, utxo_ref
+            self.endorsement_cbor, EndorsementAction.WITHDRAW, utxo_ref
         )
 
     # ========================================================================
     # Internal
     # ========================================================================
 
+    def _script_name_for_cbor(self, script_cbor: str) -> str | None:
+        """Return the script name ('proposal', 'critique', 'endorsement')
+        that matches *script_cbor*, or ``None``."""
+        for name, cbor_hex in [
+            ("proposal", self.proposal_cbor),
+            ("critique", self.critique_cbor),
+            ("endorsement", self.endorsement_cbor),
+        ]:
+            if cbor_hex == script_cbor:
+                return name
+        return None
+
     async def _spend_at(
-        self, script_hash: str, redeemer: RawPlutusData, utxo_ref: dict
+        self, script_cbor: str, redeemer: RawPlutusData, utxo_ref: dict
     ) -> dict:
-        result = await self.agent.interact_contract(
-            script_address=self._script_address(script_hash),
-            script_type="PlutusV3",
-            action="spend",
-            redeemer=cbor2.dumps(redeemer.data),
-            utxo_ref=utxo_ref,
-        )
+        # Use reference script if available for this script
+        script_name = self._script_name_for_cbor(script_cbor)
+        ref_utxo = self._reference_utxos.get(script_name) if script_name else None
+
+        if ref_utxo and script_name:
+            result = await self.agent.interact_contract(
+                script_hash=self._script_hashes[script_name],
+                script_type="PlutusV3",
+                action="spend",
+                redeemer=cbor2.dumps(redeemer.data),
+                utxo_ref=utxo_ref,
+                reference_utxo=ref_utxo,
+            )
+        else:
+            result = await self.agent.interact_contract(
+                script_cbor=script_cbor,
+                script_type="PlutusV3",
+                action="spend",
+                redeemer=cbor2.dumps(redeemer.data),
+                utxo_ref=utxo_ref,
+            )
         return {"tx_hash": result.tx_hash}
