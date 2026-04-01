@@ -192,7 +192,7 @@ class VectorChainContext(ChainContext):
         return int(tip.get("slot", 0))
 
     async def async_utxos(self, address: str) -> List[UTxO]:
-        raw_utxos = await self._ogmios.query_utxos([address])
+        raw_utxos = await self._ogmios.query_utxos([str(address)])
         return [_parse_utxo(u) for u in raw_utxos]
 
     async def async_submit_tx_cbor(self, cbor: Union[bytes, str]) -> str:
@@ -229,7 +229,7 @@ class VectorChainContext(ChainContext):
         return _run_sync(self.async_last_block_slot())
 
     def utxos(self, address: str) -> List[UTxO]:
-        return _run_sync(self.async_utxos(address))
+        return _run_sync(self.async_utxos(str(address)))
 
     def submit_tx_cbor(self, cbor: Union[bytes, str]) -> str:
         return _run_sync(self.async_submit_tx_cbor(cbor))
