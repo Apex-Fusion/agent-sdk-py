@@ -699,6 +699,13 @@ class VectorAgent:
         lovelace: int = 2_000_000,
         utxo_ref: dict | None = None,
         reference_utxo: dict | None = None,
+        reference_inputs: list | None = None,
+        mint_assets: dict | None = None,
+        mint_script_cbor: str | None = None,
+        mint_redeemer: bytes | None = None,
+        additional_outputs: list | None = None,
+        additional_script_inputs: list | None = None,
+        validity_start: int | None = None,
     ) -> InteractContractResult:
         """Interact with a deployed smart contract.
 
@@ -723,6 +730,16 @@ class VectorAgent:
         utxo_ref: Optional {"tx_hash": "...", "output_index": N} for specific UTxO
         reference_utxo: Optional {"tx_hash": "...", "output_index": N} pointing
             to a UTxO that holds the script as a CIP-33 reference script.
+        mint_assets: Optional dict mapping hex asset names to quantities,
+            e.g. ``{"prop_ab12...": 1}``.  Requires *mint_script_cbor*.
+        mint_script_cbor: Compiled CBOR hex of the minting policy script.
+        mint_redeemer: CBOR-encoded redeemer for the minting policy.
+        additional_outputs: Optional list of PyCardano TransactionOutput
+            objects to include in the transaction (e.g. datum outputs for
+            multi-validator transactions).
+        additional_script_inputs: Optional list of dicts with ``utxo``,
+            ``script``, ``redeemer`` for consuming extra script UTxOs in
+            the same transaction (e.g. activity UTxO alongside proposal).
         """
         if script_cbor is not None and script_hash is not None:
             raise ValueError("Provide either script_cbor or script_hash, not both")
@@ -756,6 +773,7 @@ class VectorAgent:
 
             try:
                 builder = TransactionBuilder(self._context)
+                builder.fee_buffer = 200000
                 builder.add_input_address(self._wallet.payment_address)
                 builder.add_output(
                     TransactionOutput(script_address, lovelace, datum=datum_obj)
@@ -791,8 +809,8 @@ class VectorAgent:
 
         else:
             # SPEND: collect from script
+            import cbor2
             if redeemer:
-                import cbor2
                 redeemer_obj = RawPlutusData(cbor2.loads(redeemer))
             else:
                 redeemer_obj = PlutusData()
@@ -805,12 +823,22 @@ class VectorAgent:
             if reference_utxo:
                 ref_hash = reference_utxo["tx_hash"]
                 ref_idx = reference_utxo["output_index"]
-                for u in all_utxos:
-                    if (
-                        str(u.input.transaction_id) == ref_hash
-                        and u.input.index == ref_idx
-                    ):
-                        ref_utxo_obj = u
+                ref_addr = reference_utxo.get("address")
+                # Search at explicit address, then script address, then wallet
+                search_pools = []
+                if ref_addr:
+                    search_pools.append(await self._context.async_utxos(str(ref_addr)))
+                search_pools.append(all_utxos)
+                search_pools.append(await self._context.async_utxos(str(self._wallet.payment_address)))
+                for pool in search_pools:
+                    for u in pool:
+                        if (
+                            str(u.input.transaction_id) == ref_hash
+                            and u.input.index == ref_idx
+                        ):
+                            ref_utxo_obj = u
+                            break
+                    if ref_utxo_obj:
                         break
                 if ref_utxo_obj is None:
                     raise TransactionError(
@@ -844,20 +872,97 @@ class VectorAgent:
             try:
                 from pycardano import Redeemer
                 builder = TransactionBuilder(self._context)
+                builder.fee_buffer = 200000
                 builder.add_input_address(self._wallet.payment_address)
 
                 # Use reference script (CIP-33) or embedded script
                 script_arg = ref_utxo_obj if ref_utxo_obj is not None else script
 
                 for utxo in script_utxos:
+                    # If the UTxO has an inline datum, don't pass it again —
+                    # PyCardano reads it from the UTxO automatically.
+                    has_inline_datum = utxo.output.datum is not None
                     builder.add_script_input(
                         utxo,
                         script=script_arg,
-                        datum=utxo.output.datum,
+                        datum=None if has_inline_datum else utxo.output.datum,
                         redeemer=Redeemer(redeemer_obj),
                     )
 
+                # Add additional script inputs (e.g. activity UTXO)
+                if additional_script_inputs:
+                    for asi in additional_script_inputs:
+                        asi_utxo = asi["utxo"]
+                        asi_script = asi.get("script", script_arg)
+                        asi_redeemer_obj = asi.get("redeemer", redeemer_obj)
+                        has_inline = asi_utxo.output.datum is not None
+                        builder.add_script_input(
+                            asi_utxo,
+                            script=asi_script,
+                            datum=None if has_inline else asi_utxo.output.datum,
+                            redeemer=Redeemer(asi_redeemer_obj),
+                        )
+
+                # Add minting if requested
+                if mint_assets and mint_script_cbor:
+                    mint_script_obj = self._parse_script(mint_script_cbor, script_type)
+                    mint_policy_hash = compute_script_hash(mint_script_obj)
+                    ma = MultiAsset()
+                    ma[mint_policy_hash] = Asset()
+                    for asset_name_hex, qty in mint_assets.items():
+                        asset_name_bytes = bytes.fromhex(asset_name_hex) if asset_name_hex else b""
+                        ma[mint_policy_hash][AssetName(asset_name_bytes)] = qty
+                    builder.mint = ma
+                    if mint_redeemer:
+                        mint_redeemer_data = RawPlutusData(cbor2.loads(mint_redeemer))
+                    else:
+                        mint_redeemer_data = PlutusData()
+                    builder.add_minting_script(mint_script_obj, Redeemer(mint_redeemer_data))
+
+                # Add additional outputs (e.g. activity datum, reward outputs)
+                if additional_outputs:
+                    for extra_out in additional_outputs:
+                        builder.add_output(extra_out)
+
                 builder.required_signers = [self._wallet.payment_verification_key.hash()]
+
+                # Set validity range so validators can read current_slot
+                # from tx.validity_range.lower_bound (Finite).
+                if validity_start is not None:
+                    builder.validity_start = validity_start
+                    builder.ttl = validity_start + 360
+                    print(f"[DEBUG:agent] explicit validity_start={validity_start}")
+                else:
+                    try:
+                        tip = await self._ogmios.query_network_tip()
+                        tip_slot = tip.get("slot", 0)
+                        if tip_slot > 0:
+                            builder.validity_start = tip_slot - 60
+                            builder.ttl = tip_slot + 300
+                    except Exception:
+                        pass
+
+                # Add reference inputs (e.g. GovernanceParams, Oracle UTxOs)
+                if reference_inputs:
+                    for ref in reference_inputs:
+                        ref_hash = ref["tx_hash"]
+                        ref_idx = ref["output_index"]
+                        # Fetch the UTxO to get the full TransactionInput
+                        ref_address = ref.get("address")
+                        if ref_address:
+                            ref_utxos = await self._context.async_utxos(str(ref_address))
+                            for u in ref_utxos:
+                                if (
+                                    str(u.input.transaction_id) == ref_hash
+                                    and u.input.index == ref_idx
+                                ):
+                                    builder.reference_inputs.add(u)
+                                    break
+                        else:
+                            # Use TransactionInput directly
+                            builder.reference_inputs.add(
+                                TransactionInput.from_primitive([ref_hash, ref_idx])
+                            )
 
                 tx = builder.build_and_sign(
                     signing_keys=[self._wallet.payment_signing_key],

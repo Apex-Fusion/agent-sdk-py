@@ -41,9 +41,11 @@ from vector_agent.governance.blueprint import (
     read_blueprint,
 )
 from vector_agent.governance.client import GovernanceClient
+from vector_agent.governance.indexer import GovernanceIndexer
 
 __all__ = [
     "GovernanceClient",
+    "GovernanceIndexer",
     "ProposalType",
     "ProposalPriority",
     "ProposalState",

@@ -12,7 +12,7 @@ from pycardano.address import Address
 from pycardano.backend.base import ChainContext, GenesisParameters, ProtocolParameters
 from pycardano.hash import DatumHash, ScriptHash, TransactionId
 from pycardano.network import Network
-from pycardano.plutus import RawPlutusData
+from pycardano.plutus import ExecutionUnits, RawPlutusData
 from pycardano.transaction import (
     Asset,
     AssetName,
@@ -110,19 +110,22 @@ def _parse_utxo(raw: dict) -> UTxO:
     non_ada_keys = [k for k in ogmios_value if k != "ada"]
     if non_ada_keys:
         ma = MultiAsset()
-        for key in non_ada_keys:
-            # key format: "policyId.assetName"  (hex encoded)
-            if "." in key:
-                policy_hex, asset_hex = key.split(".", 1)
-            else:
-                policy_hex = key
-                asset_hex = ""
+        for policy_hex in non_ada_keys:
             script_hash = ScriptHash.from_primitive(policy_hex)
-            asset_name = AssetName(bytes.fromhex(asset_hex)) if asset_hex else AssetName(b"")
-            amount = int(ogmios_value[key])
-            if script_hash not in ma:
-                ma[script_hash] = Asset()
-            ma[script_hash][asset_name] = amount
+            assets_dict = ogmios_value[policy_hex]
+            if isinstance(assets_dict, dict):
+                # Ogmios nested format: {"assetNameHex": quantity, ...}
+                for asset_hex, amount in assets_dict.items():
+                    asset_name = AssetName(bytes.fromhex(asset_hex)) if asset_hex else AssetName(b"")
+                    if script_hash not in ma:
+                        ma[script_hash] = Asset()
+                    ma[script_hash][asset_name] = int(amount)
+            else:
+                # Fallback for flat integer value
+                asset_name = AssetName(b"")
+                if script_hash not in ma:
+                    ma[script_hash] = Asset()
+                ma[script_hash][asset_name] = int(assets_dict)
         multi_asset = ma
 
     if multi_asset:
@@ -236,6 +239,48 @@ class VectorChainContext(ChainContext):
 
     def submit_tx_cbor(self, cbor: Union[bytes, str]) -> str:
         return _run_sync(self.async_submit_tx_cbor(cbor))
+
+    def evaluate_tx_cbor(self, cbor: Union[bytes, str]) -> Dict[str, ExecutionUnits]:
+        if isinstance(cbor, bytes):
+            cbor = cbor.hex()
+        # Debug: decode validity_start and mint from the tx CBOR
+        try:
+            import cbor2 as _c2
+            tx_array = _c2.loads(bytes.fromhex(cbor if isinstance(cbor, str) else cbor.hex()))
+            tx_body = tx_array[0] if isinstance(tx_array, list) else tx_array
+            if isinstance(tx_body, dict):
+                vs = tx_body.get(8)
+                ttl = tx_body.get(3)
+                mint = tx_body.get(9)  # key 9 = mint in tx body
+                print(f"[DEBUG:evaluate_tx] validity_start={vs}, ttl={ttl}")
+                if mint:
+                    for policy_bytes, assets in mint.items():
+                        policy_hex = policy_bytes.hex() if isinstance(policy_bytes, bytes) else str(policy_bytes)
+                        print(f"[DEBUG:evaluate_tx] mint_policy={policy_hex[:16]}...")
+                        for name_bytes, qty in assets.items():
+                            name_hex = name_bytes.hex() if isinstance(name_bytes, bytes) else str(name_bytes)
+                            print(f"  asset={name_hex[:16]}... qty={qty}")
+                else:
+                    print("[DEBUG:evaluate_tx] NO MINT in tx body!")
+        except Exception as _e:
+            print(f"[DEBUG:evaluate_tx] CBOR decode error: {_e}")
+        return _run_sync(self._async_evaluate_tx_cbor(cbor))
+
+    async def _async_evaluate_tx_cbor(self, cbor_hex: str) -> Dict[str, ExecutionUnits]:
+        result = await self._ogmios.evaluate_tx(cbor_hex)
+        result_dict: Dict[str, ExecutionUnits] = {}
+        # Ogmios returns a list of validator evaluations
+        evaluations = result if isinstance(result, list) else []
+        for res in evaluations:
+            purpose = res["validator"]["purpose"]
+            if purpose == "withdraw":
+                purpose = "withdrawal"
+            key = f"{purpose}:{res['validator']['index']}"
+            result_dict[key] = ExecutionUnits(
+                mem=res["budget"]["memory"],
+                steps=res["budget"]["cpu"],
+            )
+        return result_dict
 
     # ------------------------------------------------------------------
     # Cache invalidation

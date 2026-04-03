@@ -96,7 +96,11 @@ class ProposalAction:
 
     @staticmethod
     def extend_review(additional_slots: int) -> RawPlutusData:
-        return RawPlutusData(cbor2.CBORTag(128, [additional_slots]))
+        # Constructor 7 → Plutus tag 1280 (not 128; tags 121-127 cover constructors 0-6 only)
+        return RawPlutusData(cbor2.CBORTag(1280, [additional_slots]))
+
+    # Constructor 8 → Plutus tag 1281
+    SPEND_ACTIVITY = RawPlutusData(cbor2.CBORTag(1281, []))
 
 
 class CritiqueType:

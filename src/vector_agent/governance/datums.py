@@ -17,6 +17,16 @@ def _unwrap(val):
     return val
 
 
+def _plutus_bool(val: bool):
+    """Encode a Python bool as a Plutus Bool constructor.
+
+    In Aiken/Plutus, Bool is a sum type:
+      False = Constructor 0 = CBORTag(121, [])
+      True  = Constructor 1 = CBORTag(122, [])
+    """
+    return cbor2.CBORTag(122, []) if val else cbor2.CBORTag(121, [])
+
+
 def build_proposal_datum(
     proposer_did: str,
     proposer_vkey_hash: bytes,
@@ -45,11 +55,11 @@ def build_proposal_datum(
         cbor2.CBORTag(
             121,
             [
-                proposer_did.encode("utf-8"),
+                proposer_did if isinstance(proposer_did, bytes) else proposer_did.encode("utf-8"),
                 credential,
                 proposal_hash,
                 _unwrap(proposal_type),
-                storage_uri.encode("utf-8"),
+                storage_uri if isinstance(storage_uri, bytes) else storage_uri.encode("utf-8"),
                 stake_amount,
                 submitted_at,
                 review_window,
@@ -82,15 +92,15 @@ def build_critique_datum(
         cbor2.CBORTag(
             121,
             [
-                critic_did.encode("utf-8"),
+                critic_did if isinstance(critic_did, bytes) else critic_did.encode("utf-8"),
                 credential,
                 output_ref,
                 critique_hash,
-                storage_uri.encode("utf-8"),
+                storage_uri if isinstance(storage_uri, bytes) else storage_uri.encode("utf-8"),
                 _unwrap(critique_type),
                 stake_amount,
                 submitted_at,
-                1 if incorporated else 0,
+                _plutus_bool(incorporated),
             ],
         )
     )
@@ -112,7 +122,7 @@ def build_endorsement_datum(
         cbor2.CBORTag(
             121,
             [
-                endorser_did.encode("utf-8"),
+                endorser_did if isinstance(endorser_did, bytes) else endorser_did.encode("utf-8"),
                 credential,
                 output_ref,
                 stake_amount,
@@ -217,7 +227,7 @@ def build_treasury_batch_datum(
 ) -> RawPlutusData:
     """Build a TreasuryBatchDatum (§9.4)."""
     return RawPlutusData(
-        cbor2.CBORTag(121, [batch_id, 1 if active else 0])
+        cbor2.CBORTag(121, [batch_id, _plutus_bool(active)])
     )
 
 
@@ -230,6 +240,6 @@ def build_oracle_datum(
     credential = cbor2.CBORTag(121, [oracle_vkey_hash])
     return RawPlutusData(
         cbor2.CBORTag(
-            121, [credential, treasury_script_hash, 1 if active else 0]
+            121, [credential, treasury_script_hash, _plutus_bool(active)]
         )
     )

@@ -24,12 +24,21 @@ class OgmiosClient:
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 resp = await client.post(self._url, json=payload)
-                resp.raise_for_status()
             except httpx.HTTPError as e:
                 raise ConnectionError(f"Ogmios request failed ({method}): {e}") from e
-        data = resp.json()
+        # Parse response body before checking status — Ogmios returns
+        # detailed error information in the JSON body even on 4xx.
+        try:
+            data = resp.json()
+        except Exception:
+            resp.raise_for_status()
+            return {}
         if "error" in data:
             raise ConnectionError(f"Ogmios RPC error ({method}): {data['error']}")
+        if resp.status_code >= 400:
+            raise ConnectionError(
+                f"Ogmios HTTP {resp.status_code} ({method}): {data}"
+            )
         return data.get("result", data)
 
     async def query_protocol_parameters(self) -> dict:
