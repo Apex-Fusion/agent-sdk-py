@@ -372,6 +372,182 @@ class GovernanceIndexer:
             ),
         }
 
+    # ========================================================================
+    # Quality Scoring (§8.2, §14)
+    # ========================================================================
+
+    # Critique quality heuristic weights (§8.2)
+    CRITIQUE_WEIGHTS = {
+        "data_backed": 0.30,
+        "specificity": 0.25,
+        "novelty": 0.20,
+        "track_record": 0.15,
+        "timeliness": 0.10,
+    }
+
+    # Quality signal component weights (§8.2)
+    QUALITY_SIGNAL_WEIGHTS = {
+        "reputation": 0.40,
+        "endorsement": 0.30,
+        "controversy": 0.20,
+        "track_record": 0.10,
+    }
+
+    # Thresholds for normalization
+    ELITE_REPUTATION_THRESHOLD = 500_000_000  # 500 AP3X (lovelace)
+    MIN_PROPOSAL_STAKE = 25_000_000  # 25 AP3X (lovelace)
+
+    def compute_critique_quality(
+        self,
+        critique: dict,
+        proposal: dict,
+        all_critiques: list[dict],
+        critic_track_record: dict | None = None,
+    ) -> dict:
+        """Compute quality score for a critique using 5 weighted heuristics.
+
+        Args:
+            critique: Decoded critique dict.
+            proposal: Decoded proposal dict the critique references.
+            all_critiques: All critiques for this proposal.
+            critic_track_record: Agent track record (from get_agent_track_record).
+
+        Returns:
+            Dict with individual heuristic scores and total quality score.
+        """
+        scores = {}
+
+        # 1. Data-backed (0.3): critique type Amendment or has storage_uri
+        #    Better proxy: non-empty storage_uri with reasonable length
+        uri = critique.get("storage_uri", "")
+        has_data = len(uri) > 10 and ("ipfs://" in uri or "ual:" in uri.lower())
+        scores["data_backed"] = 1.0 if has_data else 0.3
+
+        # 2. Specificity (0.25): Amendment type is most specific,
+        #    Opposing with content is next, Supportive is least
+        ctype = critique.get("critique_type", "")
+        if ctype == "Amendment":
+            scores["specificity"] = 1.0
+        elif ctype == "Opposing":
+            scores["specificity"] = 0.7
+        else:
+            scores["specificity"] = 0.4
+
+        # 3. Novelty (0.2): first critique of its type for this proposal
+        same_type_count = sum(
+            1 for c in all_critiques
+            if c.get("critique_type") == ctype
+            and c.get("critic_did") != critique.get("critic_did")
+        )
+        scores["novelty"] = 1.0 if same_type_count == 0 else max(0.2, 1.0 / (1 + same_type_count))
+
+        # 4. Track record (0.15): critic's historical incorporation + adoption rate
+        if critic_track_record:
+            adopted = critic_track_record.get("adopted_count", 0)
+            scores["track_record"] = min(1.0, adopted / 5)
+        else:
+            scores["track_record"] = 0.0
+
+        # 5. Timeliness (0.1): submitted early in review window
+        submitted_at = critique.get("submitted_at", 0)
+        proposal_submitted = proposal.get("submitted_at", 0)
+        review_window = proposal.get("review_window", 1)
+        if review_window > 0 and proposal_submitted > 0:
+            elapsed = max(0, submitted_at - proposal_submitted)
+            fraction_elapsed = min(1.0, elapsed / review_window)
+            scores["timeliness"] = max(0.0, 1.0 - fraction_elapsed)
+        else:
+            scores["timeliness"] = 0.5
+
+        # Weighted total
+        total = sum(
+            scores[k] * self.CRITIQUE_WEIGHTS[k]
+            for k in self.CRITIQUE_WEIGHTS
+        )
+        scores["total"] = round(total, 4)
+
+        return scores
+
+    async def compute_proposal_quality_signal(
+        self,
+        proposal: dict,
+        proposer_reputation_lovelace: int = 0,
+    ) -> float:
+        """Compute quality signal for Foundation review ordering (§8.2).
+
+        quality_signal = normalized_reputation × 0.4
+                       + normalized_endorsement × 0.3
+                       + controversy_discount × 0.2
+                       + adoption_track_record × 0.1
+
+        Args:
+            proposal: Decoded proposal dict (must have utxo_ref).
+            proposer_reputation_lovelace: Proposer's Game 3 self-stake (0 if unknown).
+
+        Returns:
+            Quality signal float in [0.0, 1.0].
+        """
+        ref = proposal.get("utxo_ref", {})
+        tx_hash = ref.get("tx_hash", "")
+        idx = ref.get("output_index", 0)
+
+        # Component 1: Normalized reputation (Game 3 stake)
+        norm_rep = min(1.0, proposer_reputation_lovelace / self.ELITE_REPUTATION_THRESHOLD)
+
+        # Component 2: Normalized endorsement stake
+        endorsements = await self.get_endorsements(tx_hash, idx)
+        total_endorsement = sum(e.get("stake_amount", 0) for e in endorsements)
+        norm_endorsement = min(1.0, total_endorsement / (self.MIN_PROPOSAL_STAKE * 10))
+
+        # Component 3: Controversy discount (fewer opposing critiques = higher)
+        critiques = await self.get_critiques(tx_hash, idx)
+        opposing_count = sum(1 for c in critiques if c.get("critique_type") == "Opposing")
+        controversy = 1.0 / (1 + opposing_count)
+
+        # Component 4: Adoption track record
+        proposer_did = proposal.get("proposer_did", "")
+        track = await self.get_agent_track_record(proposer_did) if proposer_did else {}
+        adoption_rate = min(1.0, track.get("adopted_count", 0) / 5)
+
+        # Emergency bonus (§8.2)
+        emergency_bonus = 0.5 if proposal.get("priority") == "Emergency" else 0.0
+
+        signal = (
+            norm_rep * self.QUALITY_SIGNAL_WEIGHTS["reputation"]
+            + norm_endorsement * self.QUALITY_SIGNAL_WEIGHTS["endorsement"]
+            + controversy * self.QUALITY_SIGNAL_WEIGHTS["controversy"]
+            + adoption_rate * self.QUALITY_SIGNAL_WEIGHTS["track_record"]
+            + emergency_bonus
+        )
+        return round(min(1.0, signal), 4)
+
+    async def get_proposals_ranked(
+        self,
+        state: str = "Open",
+        proposer_reputation: dict[str, int] | None = None,
+    ) -> list[dict]:
+        """Get proposals ranked by quality signal for Foundation review.
+
+        Args:
+            state: Filter by proposal state (default "Open").
+            proposer_reputation: Optional dict mapping proposer_did to
+                reputation lovelace (Game 3 self-stake). If None, reputation
+                component is 0 for all proposers.
+
+        Returns:
+            List of proposal dicts with ``quality_signal`` field, sorted descending.
+        """
+        proposals = await self.get_proposals(state=state)
+        rep_map = proposer_reputation or {}
+
+        for p in proposals:
+            did = p.get("proposer_did", "")
+            rep = rep_map.get(did, 0)
+            p["quality_signal"] = await self.compute_proposal_quality_signal(p, rep)
+
+        proposals.sort(key=lambda p: p.get("quality_signal", 0), reverse=True)
+        return proposals
+
     async def get_treasury_balance(self) -> dict:
         """Sum lovelace at the treasury holder address."""
         if not self._treasury_addr:

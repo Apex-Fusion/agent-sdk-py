@@ -172,11 +172,11 @@ def build_governance_params(
     min_proposal_stake: int = 25_000_000,
     min_critique_stake: int = 5_000_000,
     min_governance_endorsement: int = 10_000_000,
-    min_review_window: int = 302_400,
-    max_review_window: int = 2_592_000,
+    min_review_window: int = 259_200_000,        # ~3 days in POSIX ms
+    max_review_window: int = 2_419_200_000,      # ~28 days in POSIX ms
     max_amendments: int = 5,
     max_active_proposals: int = 3,
-    proposal_cooldown: int = 6_171,
+    proposal_cooldown: int = 86_400_000,         # ~24 hours in POSIX ms
     proposer_reward_share: int = 7_000,
     critic_reward_share: int = 2_000,
     protocol_fee_rate: int = 1_000,
@@ -185,13 +185,18 @@ def build_governance_params(
     max_incorporated_critiques: int = 10,
     max_treasury_request: int = 10_000_000_000,
     emergency_stake_multiplier: int = 5_000,
-    emergency_review_window: int = 43_200,
-    param_execution_delay: int = 604_800,
+    emergency_review_window: int = 43_200_000,   # ~12 hours in POSIX ms
+    param_execution_delay: int = 604_800_000,    # ~7 days in POSIX ms
     min_prediction_pool: int = 100_000_000,
     credibility_pool_low_threshold: int = 500_000_000,
     credibility_pool_critical_threshold: int = 100_000_000,
 ) -> RawPlutusData:
-    """Build a GovernanceParams datum (§4.5)."""
+    """Build a GovernanceParams datum (§4.5).
+
+    All temporal values (review windows, cooldown, delay) are in POSIX
+    milliseconds, matching the on-chain current_slot from validity_range
+    and the submitted_at field in ProposalDatum.
+    """
     return RawPlutusData(
         cbor2.CBORTag(
             121,

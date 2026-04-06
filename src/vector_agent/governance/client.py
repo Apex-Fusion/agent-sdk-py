@@ -224,7 +224,7 @@ class GovernanceClient:
         proposal_type: PlutusData,
         storage_uri: str,
         stake_lovelace: int = 25_000_000,
-        review_window: int = 604_800,
+        review_window: int = 604_800_000,
         priority: PlutusData = None,
     ) -> dict:
         """Submit a new governance proposal.
@@ -235,7 +235,7 @@ class GovernanceClient:
             proposal_type: ProposalType variant.
             storage_uri: IPFS/OriginTrail URI for full proposal.
             stake_lovelace: AP3X to stake in lovelace (default 25 AP3X).
-            review_window: Review window in slots (default ~7 days).
+            review_window: Review window in POSIX ms (default ~7 days).
             priority: ProposalPriority (default Standard).
 
         Returns:
@@ -285,7 +285,7 @@ class GovernanceClient:
         proposal_type: PlutusData,
         storage_uri: str,
         stake_lovelace: int = 25_000_000,
-        review_window: int = 604_800,
+        review_window: int = 604_800_000,
         priority: PlutusData = None,
     ) -> dict:
         """Submit a governance proposal with full on-chain validation.
@@ -304,7 +304,7 @@ class GovernanceClient:
             proposal_type: ProposalType variant.
             storage_uri: IPFS/OriginTrail URI for full proposal.
             stake_lovelace: AP3X to stake in lovelace (default 25 AP3X).
-            review_window: Review window in slots (default ~7 days).
+            review_window: Review window in POSIX ms (default ~7 days).
             priority: ProposalPriority (default Standard).
 
         Returns:
@@ -338,8 +338,8 @@ class GovernanceClient:
         current_posix_ms = current_slot * _sl_ms + _sys_start_ms
 
         # Build the ProposalDatum
-        # submitted_at uses POSIX ms (matches on-chain current_slot from validity range)
-        # review_window stays in slots/seconds (matches GovernanceParams values)
+        # submitted_at and review_window are both in POSIX ms
+        # (matches on-chain current_slot from validity range lower bound)
         datum = build_proposal_datum(
             proposer_did=proposer_did,
             proposer_vkey_hash=vkey_hash,
@@ -657,10 +657,143 @@ class GovernanceClient:
         return await self._spend_at(self.proposal_cbor, redeemer, utxo_ref)
 
     async def expire_proposal(self, utxo_ref: dict) -> dict:
-        """Expire a proposal after review window (callable by anyone)."""
+        """Expire a proposal after review window (simple, no token burn).
+
+        For full on-chain compliance, use :meth:`validated_expire_proposal`.
+        """
         return await self._spend_at(
             self.proposal_cbor, ProposalAction.EXPIRE, utxo_ref
         )
+
+    async def validated_expire_proposal(
+        self,
+        utxo_ref: dict,
+        activity_utxo_ref: dict,
+        proposer_did: str | bytes,
+    ) -> dict:
+        """Expire a proposal with full on-chain validation.
+
+        Burns the proposal token, decrements activity, and returns
+        the proposer's stake. Callable by anyone after review window.
+
+        Args:
+            utxo_ref: The proposal UTxO to expire (tx_hash + output_index).
+            activity_utxo_ref: The proposer's activity UTxO (tx_hash + output_index).
+            proposer_did: Proposer's DID (for activity token lookup).
+        """
+        if not self.proposal_mint_cbor:
+            raise ValueError("proposal_mint_cbor is required for validated expire")
+
+        proposal_address = self._script_address(self.proposal_cbor)
+        proposal_mint_hash = self._script_hashes.get("proposal_mint", "")
+
+        # Fetch the proposal UTxO to find the proposal token
+        proposal_utxos = await self.agent.context.async_utxos(proposal_address)
+        target_utxo = None
+        for u in proposal_utxos:
+            if (
+                str(u.input.transaction_id) == utxo_ref["tx_hash"]
+                and u.input.index == utxo_ref["output_index"]
+            ):
+                target_utxo = u
+                break
+        if target_utxo is None:
+            raise ValueError(f"Proposal UTxO not found: {utxo_ref}")
+
+        # Find the proposal token name
+        prop_token_name = None
+        mint_policy = ScriptHash.from_primitive(bytes.fromhex(proposal_mint_hash))
+        if hasattr(target_utxo.output.amount, 'multi_asset') and target_utxo.output.amount.multi_asset:
+            for pid, assets_map in target_utxo.output.amount.multi_asset.items():
+                if pid.payload.hex() == proposal_mint_hash:
+                    for aname in assets_map:
+                        if aname.payload[:5] == b"prop_":
+                            prop_token_name = aname.payload
+                            break
+        if prop_token_name is None:
+            raise ValueError("No proposal token (prop_*) found in UTxO")
+
+        # Fetch the activity UTxO
+        activity_utxo = None
+        for u in proposal_utxos:
+            if (
+                str(u.input.transaction_id) == activity_utxo_ref["tx_hash"]
+                and u.input.index == activity_utxo_ref["output_index"]
+            ):
+                activity_utxo = u
+                break
+        if activity_utxo is None:
+            raise ValueError(f"Activity UTxO not found: {activity_utxo_ref}")
+
+        # Decode current activity datum to get count
+        act_datum_raw = activity_utxo.output.datum.data
+        old_count = act_datum_raw.value[2]
+
+        # Build decremented activity datum
+        act_token = self._activity_token_name(proposer_did)
+        vkey_hash = bytes(self.agent._wallet.payment_verification_key.hash())
+        new_activity_datum = RawPlutusData(
+            cbor2.CBORTag(
+                121,
+                [
+                    proposer_did if isinstance(proposer_did, bytes) else proposer_did.encode("utf-8"),
+                    cbor2.CBORTag(121, [vkey_hash]),
+                    old_count - 1,
+                    act_datum_raw.value[3],
+                ],
+            )
+        )
+
+        # Build activity output
+        proposal_script_hash = ScriptHash.from_primitive(
+            bytes.fromhex(self._script_hashes["proposal"])
+        )
+        proposal_addr = Address(
+            payment_part=proposal_script_hash, network=Network.MAINNET
+        )
+
+        act_ma = MultiAsset()
+        act_ma[mint_policy] = Asset()
+        act_ma[mint_policy][AssetName(act_token)] = 1
+        activity_output = TransactionOutput(
+            proposal_addr,
+            Value(2_000_000, act_ma),
+            datum=RawPlutusData(new_activity_datum.data),
+        )
+
+        # Burn proposal token
+        mint_assets = {prop_token_name.hex(): -1}
+
+        # Activity input uses SpendActivity redeemer
+        activity_redeemer = RawPlutusData(ProposalAction.SPEND_ACTIVITY.data)
+        additional_inputs = [{
+            "utxo": activity_utxo,
+            "redeemer": activity_redeemer,
+        }]
+
+        ref_inputs = self._governance_ref_inputs or None
+
+        # Get current tip for validity_start
+        tip = await self.agent.context._ogmios.query_network_tip()
+        tip_slot = tip.get("slot", 0)
+        spend_slot = tip_slot - 60
+
+        result = await self.agent.interact_contract(
+            script_cbor=self.proposal_cbor,
+            script_type="PlutusV3",
+            action="spend",
+            redeemer=cbor2.dumps(ProposalAction.EXPIRE.data),
+            utxo_ref=utxo_ref,
+            reference_inputs=ref_inputs,
+            mint_assets=mint_assets,
+            mint_script_cbor=self.proposal_mint_cbor,
+            mint_redeemer=cbor2.dumps(ProposalAction.EXPIRE.data),
+            additional_outputs=[activity_output],
+            additional_script_inputs=additional_inputs,
+            validity_start=spend_slot,
+        )
+
+        return {"tx_hash": result.tx_hash}
 
     async def expire_stale_proposal(self, utxo_ref: dict) -> dict:
         """Expire a stale ParameterChange proposal (callable by anyone)."""
@@ -678,7 +811,9 @@ class GovernanceClient:
         reasoning_hash: bytes,
         reward_amount: int,
     ) -> dict:
-        """Foundation adopts a proposal (oracle action).
+        """Foundation adopts a proposal (simple oracle action, no token burn).
+
+        For full on-chain compliance, use :meth:`validated_adopt_proposal`.
 
         Args:
             utxo_ref: Proposal UTxO reference.
@@ -689,6 +824,146 @@ class GovernanceClient:
         result = await self._spend_at(self.proposal_cbor, redeemer, utxo_ref)
         result["reward"] = reward_amount
         return result
+
+    async def validated_adopt_proposal(
+        self,
+        utxo_ref: dict,
+        activity_utxo_ref: dict,
+        proposer_did: str | bytes,
+        reasoning_hash: bytes,
+        reward_amount: int,
+    ) -> dict:
+        """Foundation adopts a proposal with full on-chain validation.
+
+        Burns the proposal token, decrements activity, and returns
+        the proposer's stake. The wallet must be the oracle signer.
+
+        Args:
+            utxo_ref: The proposal UTxO to adopt (tx_hash + output_index).
+            activity_utxo_ref: The proposer's activity UTxO (tx_hash + output_index).
+            proposer_did: Proposer's DID (for activity token lookup).
+            reasoning_hash: blake2b_256 hash of adoption reasoning (32 bytes).
+            reward_amount: AP3X reward in lovelace.
+        """
+        if not self.proposal_mint_cbor:
+            raise ValueError("proposal_mint_cbor is required for validated adopt")
+        if len(reasoning_hash) != 32:
+            raise ValueError("reasoning_hash must be 32 bytes")
+
+        proposal_address = self._script_address(self.proposal_cbor)
+        proposal_mint_hash = self._script_hashes.get("proposal_mint", "")
+
+        # Fetch the proposal UTxO to find the proposal token and datum
+        proposal_utxos = await self.agent.context.async_utxos(proposal_address)
+        target_utxo = None
+        for u in proposal_utxos:
+            if (
+                str(u.input.transaction_id) == utxo_ref["tx_hash"]
+                and u.input.index == utxo_ref["output_index"]
+            ):
+                target_utxo = u
+                break
+        if target_utxo is None:
+            raise ValueError(f"Proposal UTxO not found: {utxo_ref}")
+
+        # Find the proposal token name
+        prop_token_name = None
+        mint_policy = ScriptHash.from_primitive(bytes.fromhex(proposal_mint_hash))
+        if hasattr(target_utxo.output.amount, 'multi_asset') and target_utxo.output.amount.multi_asset:
+            for pid, assets_map in target_utxo.output.amount.multi_asset.items():
+                if pid.payload.hex() == proposal_mint_hash:
+                    for aname in assets_map:
+                        if aname.payload[:5] == b"prop_":
+                            prop_token_name = aname.payload
+                            break
+        if prop_token_name is None:
+            raise ValueError("No proposal token (prop_*) found in UTxO")
+
+        # Fetch the activity UTxO
+        activity_utxo = None
+        for u in proposal_utxos:
+            if (
+                str(u.input.transaction_id) == activity_utxo_ref["tx_hash"]
+                and u.input.index == activity_utxo_ref["output_index"]
+            ):
+                activity_utxo = u
+                break
+        if activity_utxo is None:
+            raise ValueError(f"Activity UTxO not found: {activity_utxo_ref}")
+
+        # Decode current activity datum to get count
+        act_datum_raw = activity_utxo.output.datum.data
+        old_count = act_datum_raw.value[2]
+
+        # Build decremented activity datum
+        act_token = self._activity_token_name(proposer_did)
+        vkey_hash = bytes(self.agent._wallet.payment_verification_key.hash())
+        new_activity_datum = RawPlutusData(
+            cbor2.CBORTag(
+                121,
+                [
+                    proposer_did if isinstance(proposer_did, bytes) else proposer_did.encode("utf-8"),
+                    cbor2.CBORTag(121, [vkey_hash]),
+                    old_count - 1,
+                    act_datum_raw.value[3],
+                ],
+            )
+        )
+
+        # Build activity output
+        proposal_script_hash = ScriptHash.from_primitive(
+            bytes.fromhex(self._script_hashes["proposal"])
+        )
+        proposal_addr = Address(
+            payment_part=proposal_script_hash, network=Network.MAINNET
+        )
+
+        act_ma = MultiAsset()
+        act_ma[mint_policy] = Asset()
+        act_ma[mint_policy][AssetName(act_token)] = 1
+        activity_output = TransactionOutput(
+            proposal_addr,
+            Value(2_000_000, act_ma),
+            datum=RawPlutusData(new_activity_datum.data),
+        )
+
+        # Burn proposal token
+        mint_assets = {prop_token_name.hex(): -1}
+
+        # Activity input uses SpendActivity redeemer
+        activity_redeemer = RawPlutusData(ProposalAction.SPEND_ACTIVITY.data)
+        additional_inputs = [{
+            "utxo": activity_utxo,
+            "redeemer": activity_redeemer,
+        }]
+
+        ref_inputs = self._governance_ref_inputs or None
+
+        # Get current tip for validity_start
+        tip = await self.agent.context._ogmios.query_network_tip()
+        tip_slot = tip.get("slot", 0)
+        spend_slot = tip_slot - 60
+
+        redeemer = ProposalAction.adopt(reasoning_hash, reward_amount)
+        result = await self.agent.interact_contract(
+            script_cbor=self.proposal_cbor,
+            script_type="PlutusV3",
+            action="spend",
+            redeemer=cbor2.dumps(redeemer.data),
+            utxo_ref=utxo_ref,
+            reference_inputs=ref_inputs,
+            mint_assets=mint_assets,
+            mint_script_cbor=self.proposal_mint_cbor,
+            mint_redeemer=cbor2.dumps(redeemer.data),
+            additional_outputs=[activity_output],
+            additional_script_inputs=additional_inputs,
+            validity_start=spend_slot,
+        )
+
+        return {
+            "tx_hash": result.tx_hash,
+            "reward": reward_amount,
+        }
 
     async def reject_proposal(
         self, utxo_ref: dict, reasoning_hash: bytes
