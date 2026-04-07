@@ -256,6 +256,17 @@ class GovernanceIndexer:
             else:
                 proposal["lovelace"] = 0
 
+            # Check for proposal token (prop_*) — UTxOs without tokens
+            # are orphaned lock-only datums that can't be spent
+            has_token = False
+            if hasattr(u.output.amount, "multi_asset") and u.output.amount.multi_asset:
+                for _pid, assets in u.output.amount.multi_asset.items():
+                    for aname in assets:
+                        if aname.payload[:5] == b"prop_":
+                            has_token = True
+                            break
+            proposal["has_proposal_token"] = has_token
+
             proposals.append(proposal)
 
         # Sort
