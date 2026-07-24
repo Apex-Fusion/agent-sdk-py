@@ -1,6 +1,8 @@
 # apex-fusion-agent-sdk
 
-Python Agent SDK for the Vector blockchain. Built on PyCardano + Ogmios.
+Python Agent SDK for **Vector**, the Apex Fusion eUTXO L2. Built on PyCardano + Ogmios.
+
+**Vector mainnet is live.** Full guides: [Vector AI documentation](https://apex-fusion.github.io/vector-ai-documentation/).
 
 ## Installation
 
@@ -9,6 +11,19 @@ pip install apex-fusion-agent-sdk
 ```
 
 Requires Python >= 3.11.
+
+## Networks
+
+Vector runs a public testnet and mainnet. The SDK talks to whichever endpoints you configure:
+
+| Variable | Testnet | Mainnet |
+|---|---|---|
+| `VECTOR_OGMIOS_URL` | `https://ogmios.vector.testnet.apexfusion.org` | `https://ogmios.vector.mainnet.apexfusion.org` |
+| `VECTOR_SUBMIT_URL` | `https://submit.vector.testnet.apexfusion.org/api/submit/tx` | `https://submit.vector.mainnet.apexfusion.org/api/submit/tx` |
+| `VECTOR_KOIOS_URL` | `https://v2.koios.vector.testnet.apexfusion.org/` | `https://v2.koios.vector.mainnet.apexfusion.org/` |
+| `VECTOR_EXPLORER_URL` | `https://vector.testnet.apexscan.org` | `https://explorer.vector.mainnet.apexfusion.org` |
+
+Two things to know: Vector's testnet uses the **mainnet network ID**, so all addresses start with `addr1`. And the native coin is **AP3X** (smallest unit DFM, 1 AP3X = 1,000,000 DFM) - code-level field names like `ada` and `lovelace` come from the underlying Cardano tooling and denominate AP3X/DFM amounts.
 
 ## Quick Start
 
@@ -22,7 +37,7 @@ async def main():
         print(f"Address: {address}")
 
         balance = await agent.get_balance()
-        print(f"ADA: {balance.ada}")
+        print(f"AP3X: {balance.ada}")
 
         tx = await agent.send(to="addr1...", ada=5.0)
         print(f"TX Hash: {tx.tx_hash}")
@@ -37,17 +52,17 @@ Configuration is read from environment variables by default (see [Configuration]
 
 ### Two Modes of Operation
 
-- **`VectorAgent`** — Standalone mode. Talks directly to Ogmios and submit-api via PyCardano. No external server needed.
-- **`VectorAgentMCP`** — MCP client mode. Connects to a TypeScript MCP server via stdio. Same API surface as `VectorAgent`.
+- **`VectorAgent`** - Standalone mode. Talks directly to Ogmios and submit-api via PyCardano. No external server needed.
+- **`VectorAgentMCP`** - MCP client mode. Connects to a TypeScript MCP server via stdio. Same API surface as `VectorAgent`.
 
 ### Wallet Management
 
-- **HD Wallets** — BIP39 mnemonic with CIP-1852 derivation
-- **`.skey` Files** — cardano-cli signing key files
+- **HD Wallets** - BIP39 mnemonic with CIP-1852 derivation
+- **`.skey` Files** - cardano-cli signing key files
 
 ### Transactions
 
-- Send ADA and native tokens
+- Send AP3X and native tokens
 - Build multi-output transactions
 - Dry-run simulation with fee estimates
 - Transaction history queries via Koios
@@ -68,7 +83,7 @@ Configuration is read from environment variables by default (see [Configuration]
 
 ```python
 await agent.get_address()                  # Agent's payment address
-await agent.get_balance()                  # ADA + token balances
+await agent.get_balance()                  # AP3X + token balances
 await agent.get_balance("addr1...")         # Balance of any address
 await agent.get_utxos()                    # List UTxOs
 await agent.get_protocol_parameters()      # Raw protocol params
@@ -79,7 +94,7 @@ await agent.get_transaction_history()      # TX history via Koios
 ### Transfer Methods
 
 ```python
-# Send ADA
+# Send AP3X
 tx = await agent.send(to="addr1...", ada=5.0)
 tx = await agent.send(to="addr1...", lovelace=5_000_000)
 
@@ -97,7 +112,7 @@ tx = await agent.send_tokens(
 ```python
 # Dry-run (simulate without submitting)
 result = await agent.dry_run(to="addr1...", ada=5.0)
-print(f"Fee: {result.fee_ada} ADA")
+print(f"Fee: {result.fee_ada} AP3X")
 
 # Multi-output transaction
 result = await agent.build_transaction(
@@ -141,7 +156,7 @@ async with VectorAgentMCP(
     balance = await agent.get_balance()
 ```
 
-`VectorAgentMCP` has the same API as `VectorAgent` — it delegates all operations to a TypeScript MCP server over stdio.
+`VectorAgentMCP` has the same API as `VectorAgent` - it delegates all operations to a TypeScript MCP server over stdio.
 
 ## Configuration
 
@@ -156,8 +171,8 @@ All settings can be passed as constructor arguments or read from environment var
 | `VECTOR_MNEMONIC` | BIP39 mnemonic | — |
 | `VECTOR_SKEY_PATH` | Path to cardano-cli `.skey` file | — |
 | `VECTOR_ACCOUNT_INDEX` | HD derivation account index | `0` |
-| `VECTOR_SPEND_LIMIT_PER_TX` | Per-transaction limit (lovelace) | `100000000` (100 ADA) |
-| `VECTOR_SPEND_LIMIT_DAILY` | Daily limit (lovelace) | `500000000` (500 ADA) |
+| `VECTOR_SPEND_LIMIT_PER_TX` | Per-transaction limit (lovelace) | `100000000` (100 AP3X) |
+| `VECTOR_SPEND_LIMIT_DAILY` | Daily limit (lovelace) | `500000000` (500 AP3X) |
 
 See [.env.example](.env.example) for a template.
 
