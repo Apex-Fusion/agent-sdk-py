@@ -21,7 +21,7 @@ Vector runs a public testnet and mainnet. The SDK talks to whichever endpoints y
 | `VECTOR_OGMIOS_URL` | `https://ogmios.vector.testnet.apexfusion.org` | `https://ogmios.vector.mainnet.apexfusion.org` |
 | `VECTOR_SUBMIT_URL` | `https://submit.vector.testnet.apexfusion.org/api/submit/tx` | `https://submit.vector.mainnet.apexfusion.org/api/submit/tx` |
 | `VECTOR_KOIOS_URL` | `https://v2.koios.vector.testnet.apexfusion.org/` | `https://v2.koios.vector.mainnet.apexfusion.org/` |
-| `VECTOR_EXPLORER_URL` | `https://vector.testnet.apexscan.org` | `https://explorer.vector.mainnet.apexfusion.org` |
+| `VECTOR_EXPLORER_URL` | `https://vector.testnet.apexscan.org` | `https://vector.apexscan.org/en/` |
 
 Two things to know: Vector's testnet uses the **mainnet network ID**, so all addresses start with `addr1`. And the native coin is **AP3X** (smallest unit DFM, 1 AP3X = 1,000,000 DFM) - code-level field names like `ada` and `lovelace` come from the underlying Cardano tooling and denominate AP3X/DFM amounts.
 
