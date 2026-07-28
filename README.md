@@ -23,7 +23,7 @@ Vector runs a public testnet and mainnet. The SDK talks to whichever endpoints y
 | `VECTOR_KOIOS_URL` | `https://v2.koios.vector.testnet.apexfusion.org/` | `https://v2.koios.vector.mainnet.apexfusion.org/` |
 | `VECTOR_EXPLORER_URL` | `https://vector.testnet.apexscan.org` | `https://vector.apexscan.org/en/` |
 
-Two things to know: Vector's testnet uses the **mainnet network ID**, so all addresses start with `addr1`. And the native coin is **AP3X** (smallest unit DFM, 1 AP3X = 1,000,000 DFM) - code-level field names like `ada` and `lovelace` come from the underlying Cardano tooling and denominate AP3X/DFM amounts.
+Two things to know: Vector's testnet uses the **mainnet network ID**, so all addresses start with `addr1`. And the native coin is **AP3X** (smallest unit DFM, 1 AP3X = 1,000,000 DFM). Since 0.1.11 the amount parameters accept `apex=` (whole AP3X) and `dfm=` (smallest unit) as the preferred names; `ada=`/`lovelace=` remain as compatibility aliases from the underlying Cardano tooling, and response fields keep their tooling names.
 
 ## Quick Start
 
@@ -39,7 +39,7 @@ async def main():
         balance = await agent.get_balance()
         print(f"AP3X: {balance.ada}")
 
-        tx = await agent.send(to="addr1...", ada=5.0)
+        tx = await agent.send(to="addr1...", apex=5.0)
         print(f"TX Hash: {tx.tx_hash}")
         print(f"Explorer: {tx.explorer_url}")
 
@@ -95,8 +95,9 @@ await agent.get_transaction_history()      # TX history via Koios
 
 ```python
 # Send AP3X
-tx = await agent.send(to="addr1...", ada=5.0)
-tx = await agent.send(to="addr1...", lovelace=5_000_000)
+tx = await agent.send(to="addr1...", apex=5.0)
+tx = await agent.send(to="addr1...", dfm=5_000_000)
+# ada= / lovelace= still work as compatibility aliases
 
 # Send native tokens
 tx = await agent.send_tokens(
