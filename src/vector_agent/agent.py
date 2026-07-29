@@ -201,12 +201,23 @@ class VectorAgent:
         to: str,
         lovelace: int = 0,
         ada: float = 0,
+        apex: float = 0,
+        dfm: int = 0,
         metadata: dict | None = None,
     ) -> TxResult:
-        """Send ADA to an address.
+        """Send AP3X to an address.
 
-        Specify either ``lovelace`` or ``ada`` (not both).
+        Specify exactly one amount: ``apex`` (whole AP3X, preferred) or
+        ``dfm`` (smallest unit, preferred). ``ada`` and ``lovelace`` are
+        compatibility aliases inherited from the underlying Cardano
+        tooling and behave identically.
         """
+        if apex and ada:
+            raise VectorError("Specify either apex or ada, not both")
+        if dfm and lovelace:
+            raise VectorError("Specify either dfm or lovelace, not both")
+        ada = ada or apex
+        lovelace = lovelace or dfm
         if ada and lovelace:
             raise VectorError("Specify either lovelace or ada, not both")
         if ada:
@@ -279,8 +290,9 @@ class VectorAgent:
         asset_name: str,
         quantity: int,
         ada: float = 2.0,
+        apex: float = 0,
     ) -> TokenTxResult:
-        """Send native tokens with companion ADA.
+        """Send native tokens with companion AP3X.
 
         Parameters
         ----------
@@ -288,8 +300,11 @@ class VectorAgent:
         policy_id: Token policy ID (hex)
         asset_name: Token asset name (UTF-8 string or hex)
         quantity: Number of tokens to send
-        ada: Companion ADA amount (default 2.0 for min UTxO)
+        ada: Companion AP3X amount (default 2.0 for min UTxO)
+        apex: Preferred alias for ``ada``
         """
+        if apex:
+            ada = apex
         lovelace = int(ada * 1_000_000)
 
         # Validate address
@@ -367,15 +382,25 @@ class VectorAgent:
         to: str,
         lovelace: int = 0,
         ada: float = 0,
+        apex: float = 0,
+        dfm: int = 0,
     ) -> DryRunResult:
         """Simulate a transaction without submitting — returns fee estimate.
 
         Parameters
         ----------
         to: Recipient address
-        lovelace: Amount in lovelace
-        ada: Amount in ADA (alternative to lovelace)
+        apex: Amount in whole AP3X (preferred)
+        dfm: Amount in DFM, the smallest unit (preferred)
+        lovelace: Compatibility alias for ``dfm``
+        ada: Compatibility alias for ``apex``
         """
+        if apex and ada:
+            raise VectorError("Specify either apex or ada, not both")
+        if dfm and lovelace:
+            raise VectorError("Specify either dfm or lovelace, not both")
+        ada = ada or apex
+        lovelace = lovelace or dfm
         if ada and lovelace:
             raise VectorError("Specify either lovelace or ada, not both")
         if ada:
