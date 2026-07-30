@@ -29,9 +29,10 @@ from vector_agent.types import (
     VectorBalance,
 )
 
-from vector_agent import governance as governance  # noqa: F401 — Game 6
+from vector_agent import self_improvement as self_improvement  # noqa: F401 - Game 6
+from vector_agent import governance as governance  # noqa: F401 - deprecated alias of self_improvement
 
-__version__ = "0.1.0"
+__version__ = "0.1.11"
 
 __all__ = [
     "VectorAgent",

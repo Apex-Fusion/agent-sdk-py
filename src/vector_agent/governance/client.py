@@ -43,8 +43,8 @@ class GovernanceClient:
     """High-level client for governance interactions on Vector.
 
     Compiled script CBOR can be passed directly or read from environment
-    variables: ``GOVERNANCE_PROPOSAL_CBOR``, ``GOVERNANCE_CRITIQUE_CBOR``,
-    ``GOVERNANCE_ENDORSEMENT_CBOR``.
+    variables: ``SELF_IMPROVEMENT_PROPOSAL_CBOR``, ``SELF_IMPROVEMENT_CRITIQUE_CBOR``,
+    ``SELF_IMPROVEMENT_ENDORSEMENT_CBOR`` (legacy ``GOVERNANCE_*`` names are read as fallbacks).
 
     When *reference_utxos* are supplied, spend transactions use CIP-33
     reference scripts for lower fees.  Reference UTxOs can also be set
@@ -86,22 +86,27 @@ class GovernanceClient:
         self.agent = agent
         self.proposal_cbor = (
             proposal_script_cbor
+            or os.environ.get("SELF_IMPROVEMENT_PROPOSAL_CBOR")
             or os.environ.get("GOVERNANCE_PROPOSAL_CBOR", "")
         )
         self.critique_cbor = (
             critique_script_cbor
+            or os.environ.get("SELF_IMPROVEMENT_CRITIQUE_CBOR")
             or os.environ.get("GOVERNANCE_CRITIQUE_CBOR", "")
         )
         self.endorsement_cbor = (
             endorsement_script_cbor
+            or os.environ.get("SELF_IMPROVEMENT_ENDORSEMENT_CBOR")
             or os.environ.get("GOVERNANCE_ENDORSEMENT_CBOR", "")
         )
         self.proposal_mint_cbor = (
             proposal_mint_cbor
+            or os.environ.get("SELF_IMPROVEMENT_PROPOSAL_MINT_CBOR")
             or os.environ.get("GOVERNANCE_PROPOSAL_MINT_CBOR", "")
         )
         self.critique_mint_cbor = (
             critique_mint_cbor
+            or os.environ.get("SELF_IMPROVEMENT_CRITIQUE_MINT_CBOR")
             or os.environ.get("GOVERNANCE_CRITIQUE_MINT_CBOR", "")
         )
 

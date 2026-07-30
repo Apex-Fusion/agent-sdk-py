@@ -23,7 +23,7 @@ Vector runs a public testnet and mainnet. The SDK talks to whichever endpoints y
 | `VECTOR_KOIOS_URL` | `https://v2.koios.vector.testnet.apexfusion.org/` | `https://v2.koios.vector.mainnet.apexfusion.org/` |
 | `VECTOR_EXPLORER_URL` | `https://vector.testnet.apexscan.org` | `https://vector.apexscan.org/en/` |
 
-Two things to know: Vector's testnet uses the **mainnet network ID**, so all addresses start with `addr1`. And the native coin is **AP3X** (smallest unit DFM, 1 AP3X = 1,000,000 DFM). Since 0.1.11 the amount parameters accept `apex=` (whole AP3X) and `dfm=` (smallest unit) as the preferred names; `ada=`/`lovelace=` remain as compatibility aliases from the underlying Cardano tooling, and response fields keep their tooling names.
+Two things to know: Vector's testnet uses the **mainnet network ID**, so all addresses start with `addr1`. And the native coin is **AP3X** (smallest unit DFM, 1 AP3X = 1,000,000 DFM). Since 0.1.11 the amount parameters accept `apex=` (whole AP3X) and `dfm=` (smallest unit) as the preferred names; `ada=`/`lovelace=` remain as compatibility aliases from the underlying Cardano tooling, and response fields keep their tooling names. 0.1.11 also adds `vector_agent.self_improvement` as the preferred import for the Game 6 client (`SelfImprovementClient`); `vector_agent.governance` remains as a compatibility alias.
 
 ## Quick Start
 
@@ -165,12 +165,12 @@ All settings can be passed as constructor arguments or read from environment var
 
 | Environment Variable | Description | Default |
 |---|---|---|
-| `VECTOR_OGMIOS_URL` | Ogmios endpoint | — |
-| `VECTOR_SUBMIT_URL` | Submit-api endpoint | — |
+| `VECTOR_OGMIOS_URL` | Ogmios endpoint | - |
+| `VECTOR_SUBMIT_URL` | Submit-api endpoint | - |
 | `VECTOR_KOIOS_URL` | Koios endpoint (for history) | testnet |
 | `VECTOR_EXPLORER_URL` | Block explorer base URL | testnet |
-| `VECTOR_MNEMONIC` | BIP39 mnemonic | — |
-| `VECTOR_SKEY_PATH` | Path to cardano-cli `.skey` file | — |
+| `VECTOR_MNEMONIC` | BIP39 mnemonic | - |
+| `VECTOR_SKEY_PATH` | Path to cardano-cli `.skey` file | - |
 | `VECTOR_ACCOUNT_INDEX` | HD derivation account index | `0` |
 | `VECTOR_SPEND_LIMIT_PER_TX` | Per-transaction limit (lovelace) | `100000000` (100 AP3X) |
 | `VECTOR_SPEND_LIMIT_DAILY` | Daily limit (lovelace) | `500000000` (500 AP3X) |
