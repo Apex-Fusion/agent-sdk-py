@@ -1,4 +1,4 @@
-"""VectorAgentMCP — MCP client mode (SSE to hosted server, or stdio to local subprocess)."""
+"""VectorAgentMCP — MCP client mode (Streamable HTTP to hosted server, or stdio to local subprocess)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import os
 from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
-from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamablehttp_client
 
 from vector_agent.exceptions import TransactionError, VectorError
 from vector_agent.types import (
@@ -31,12 +31,14 @@ def _env(key: str, default: str | None = None) -> str | None:
 class VectorAgentMCP:
     """Vector agent that delegates to an MCP server.
 
-    Connects via SSE (hosted) or stdio (local subprocess).
+    Connects via Streamable HTTP (hosted) or stdio (local subprocess). The
+    hosted servers dropped the legacy SSE transport in v2.0.0; the URL must
+    point at the ``/mcp`` endpoint.
 
     Usage::
 
-        # SSE — hosted server (preferred)
-        async with VectorAgentMCP(server_url="https://mcp.vector.testnet.apexfusion.org/sse") as agent:
+        # Streamable HTTP — hosted server (preferred)
+        async with VectorAgentMCP(server_url="https://mcp.vector.testnet.apexfusion.org/mcp") as agent:
             balance = await agent.get_balance()
 
         # stdio — local subprocess (fallback)
@@ -55,7 +57,7 @@ class VectorAgentMCP:
     ):
         self._server_url = server_url or _env("VECTOR_MCP_URL")
         self._server_headers = server_headers
-        self._use_sse = self._server_url is not None
+        self._use_http = self._server_url is not None
 
         self._server_command = server_command or _env("VECTOR_MCP_COMMAND", "node")
         self._server_args = server_args or self._default_server_args()
@@ -74,12 +76,14 @@ class VectorAgentMCP:
         return ["build/index.js"]
 
     async def connect(self):
-        """Connect to the MCP server (SSE if URL provided, stdio otherwise)."""
-        if self._use_sse:
-            self._transport_context = sse_client(
+        """Connect to the MCP server (Streamable HTTP if URL provided, stdio otherwise)."""
+        if self._use_http:
+            self._transport_context = streamablehttp_client(
                 url=self._server_url,
                 headers=self._server_headers,
             )
+            # streamablehttp_client also yields a get_session_id callable.
+            read_stream, write_stream, _ = await self._transport_context.__aenter__()
         else:
             server_params = StdioServerParameters(
                 command=self._server_command,
@@ -88,8 +92,7 @@ class VectorAgentMCP:
                 cwd=self._working_dir,
             )
             self._transport_context = stdio_client(server_params)
-
-        read_stream, write_stream = await self._transport_context.__aenter__()
+            read_stream, write_stream = await self._transport_context.__aenter__()
 
         self._session_context = ClientSession(read_stream, write_stream)
         self._session = await self._session_context.__aenter__()
