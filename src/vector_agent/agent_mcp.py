@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
@@ -150,6 +151,32 @@ class VectorAgentMCP:
                 lovelace=int(result.get("lovelace", 0)),
                 tokens=tokens,
             )
+        if isinstance(result, str) and result.startswith("Vector Address Balance for "):
+            # Hosted server (>= 2.0.0) returns human-readable text, not JSON.
+            addr_m = re.match(r"Vector Address Balance for (\S+):", result)
+            bal_m = re.search(r"AP3X Balance:\s*([\d.]+)\s*AP3X", result)
+            if addr_m and bal_m:
+                from vector_agent.types import TokenBalance
+                ada_str = bal_m.group(1)
+                tokens = []
+                # Best effort: asset names are raw bytes and may contain
+                # newlines; only cleanly formatted lines are captured.
+                for line in result.splitlines():
+                    tok_m = re.match(
+                        r"^(\d+)\s+(.*?)\s*\(Policy:\s*([0-9a-fA-F]+)\.\.\.\)$", line
+                    )
+                    if tok_m:
+                        tokens.append(TokenBalance(
+                            policy_id=tok_m.group(3),
+                            asset_name=tok_m.group(2),
+                            quantity=int(tok_m.group(1)),
+                        ))
+                return VectorBalance(
+                    address=addr_m.group(1),
+                    ada=ada_str,
+                    lovelace=int(round(float(ada_str) * 1_000_000)),
+                    tokens=tokens,
+                )
         raise VectorError(f"Unexpected balance response: {result}")
 
     async def get_utxos(self, address: str | None = None) -> list[dict]:
@@ -162,7 +189,27 @@ class VectorAgentMCP:
             return result
         if isinstance(result, dict):
             return result.get("utxos", [])
-        return []
+        if isinstance(result, str):
+            # Hosted server (>= 2.0.0) returns human-readable text.
+            if result.startswith("No UTxOs found"):
+                return []
+            utxos = []
+            for line in result.splitlines():
+                m = re.match(
+                    r"^\s*\d+\.\s+([0-9a-fA-F]{64})#(\d+)\s+-\s+([\d.]+)\s+AP3X"
+                    r"(?:\s+\+\s+(\d+)\s+token\(s\))?\s*$",
+                    line,
+                )
+                if m:
+                    utxos.append({
+                        "tx_hash": m.group(1),
+                        "output_index": int(m.group(2)),
+                        "lovelace": int(round(float(m.group(3)) * 1_000_000)),
+                        "token_count": int(m.group(4) or 0),
+                    })
+            if utxos or result.lstrip().startswith("# UTxOs for"):
+                return utxos
+        raise VectorError(f"Unexpected UTxO response: {str(result)[:300]}")
 
     async def get_spend_limits(self) -> SpendStatus:
         """Get spend limit status via MCP."""

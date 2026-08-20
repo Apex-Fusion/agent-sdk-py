@@ -9,7 +9,7 @@ async def main():
     # SSE — connect to hosted MCP server (preferred).
     # URL can also be set via VECTOR_MCP_URL env var.
     agent = VectorAgentMCP(
-        server_url="https://mcp.vector.testnet.apexfusion.org/sse",
+        server_url="https://mcp.vector.testnet.apexfusion.org/mcp",
     )
 
     async with agent:
