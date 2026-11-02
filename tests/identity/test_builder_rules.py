@@ -1,9 +1,9 @@
-"""Builder rules of the composition review R5 and the contract fixes W4-CFIX.
+"""Builder rules that follow the contract rules of Part 2.
 
-- A Module-1 withdrawal takes the whole current reward balance of Script(M1).
-- Every spend of a record with a Module-1 party reads the configuration record.
-- A live record output holds max(10 AP3X, the ledger minimum of the output).
-- A vault escrow output holds exactly payment + both bonds; a top-up goes into the buyer bond.
+- A Module-1 withdrawal takes the whole current reward balance of Script(M1) (§3.8).
+- Every spend of a record with a Module-1 party reads the configuration record (§3.8).
+- A live record output holds max(10 AP3X, the ledger minimum of the output) (§3.2, §3.5).
+- A vault escrow output holds exactly payment + both bonds; a top-up goes into the buyer bond (§5.3).
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 
 ``fixtures/cbor-fixtures.json`` is a byte copy of Apex-Fusion/agents-marketplace
 ``contracts/identity-marketplace/fixtures/cbor-fixtures.json`` at commit
-``b5d66a6`` (the file last changed in ``a96201d``; git blob ``175f6db5``). The
+``1643583`` (the file last changed in ``a96201d``; git blob ``175f6db5``). The
 Aiken tests in ``lib/identity_marketplace/cbor_fixtures.ak`` wrote it with
 ``cbor.serialise``. Every fixture must decode and encode back to the same bytes.
 """

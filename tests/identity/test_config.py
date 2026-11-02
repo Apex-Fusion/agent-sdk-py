@@ -9,7 +9,7 @@ from vector_agent.identity.constants import DEFAULT_GATEWAY_URL, DEFAULT_KOIOS_U
 
 ROOT = "7a" * 32
 SEED = "5e" * 32 + "#3"
-IDENTITY = "9e7f343b3f839d7251c55572825bda96dbb19da3197d5f48d0f737bc"
+IDENTITY = "7bbdcb5025b366b4c1eda77bf9eee556246e7d8f7a4b1b9127f0e00c"
 
 
 def test_defaults_and_missing_values() -> None:

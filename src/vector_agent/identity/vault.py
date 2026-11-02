@@ -287,8 +287,8 @@ class Vaults:
                 agent_id=advert.agent_id,
                 refund=refund,
             )
-            # The escrow output's AP3X must equal payment + both bonds; a ledger-minimum top-up
-            # goes into the buyer bond, which returns to the buyer (contract fix W4-CFIX).
+            # The escrow output's AP3X must equal payment + both bonds (Part 2 §5.3); a ledger-minimum
+            # top-up goes into the buyer bond, which returns to the buyer.
             for _ in range(3):
                 output = TransactionOutput(scripts.escrow.address, job_total, datum=RawCBOR(escrow.to_cbor()))
                 top_up = min_lovelace(ctx, output) - job_total

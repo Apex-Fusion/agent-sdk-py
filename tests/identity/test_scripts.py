@@ -1,7 +1,7 @@
 """Embedded scripts, their checksums and parameter application.
 
 The expected applied hashes come from ``aiken blueprint apply`` (Aiken
-v1.1.21+42babe5) on the blueprint of agents-marketplace ``b5d66a6`` with the
+v1.1.21+42babe5) on the blueprint of agents-marketplace ``1643583`` with the
 parameters below, applied in blueprint order.
 """
 
@@ -35,14 +35,23 @@ ROOT = bytes([0x7A]) * 32
 APPLIED = {
     "config_holder": "288fea77a0f674c6080aadd8ed3ca42cd5a920bf1f00c0d3e63306e4",
     "config_seal": "366f8e7d78edc8f43c2fda8ceb006cc3981c6a7b35a5231e50edb220",
-    "identity": "9e7f343b3f839d7251c55572825bda96dbb19da3197d5f48d0f737bc",
-    "attestation": "5e0dccff7320d0697e1c762d30b9639befe6cf50c0dcce7f2398823c",
-    "delegation": "964ddf0fb625e467cac2cd5d2ab26496a4741f1ca3f02b8b8f3fb2fe",
-    "escrow": "3860ac5d54d7d1c624ffd6e612fd8b7629a50bd5a4f15df340a8475d",
-    "vault": "2842a4947321a85832177fec3b8a70b5b62c7285362c37d60e161bd0",
+    "identity": "7bbdcb5025b366b4c1eda77bf9eee556246e7d8f7a4b1b9127f0e00c",
+    "attestation": "dd04b96093d6e016fc77df5115d0a7a25f73fee549e7b4373f60b7b4",
+    "delegation": "0bcd624928d87ebd7fa8b01a9bec5e7a037100ed4882269d1dcc09a5",
+    "escrow": "933752a472b64bfbaefa80629bc014d116bf9f2c4c6220d3f3e587a8",
+    "vault": "9396e8b769e95ad073b0d36019f6f215d3bb6c4715a89ca90fc9653d",
     "advert": "f36e366e06d4480651aa0e1064578f0bfe275af96dfcaaabe5efe26c",
 }
-APPLIED_SIZES = {"identity": 13_699, "attestation": 7_234, "delegation": 7_081, "escrow": 5_915, "vault": 6_932}
+APPLIED_SIZES = {
+    "config_holder": 94,
+    "config_seal": 703,
+    "identity": 13_707,
+    "attestation": 7_234,
+    "delegation": 7_081,
+    "escrow": 6_086,
+    "vault": 6_932,
+    "advert": 1_024,
+}
 
 
 def test_embedded_blueprints_are_the_pinned_copies() -> None:

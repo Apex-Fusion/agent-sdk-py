@@ -3,9 +3,10 @@
 The package embeds two CIP-57 blueprints as byte copies:
 
 - ``blueprints/identity-marketplace.plutus.json``: Apex-Fusion/agents-marketplace
-  ``contracts/identity-marketplace/plutus.json`` at commit ``b5d66a6`` (git blob
-  ``64c55549``, sha256 :data:`IDENTITY_BLUEPRINT_SHA256`). Its validators are
-  unapplied: their parameters are deployment values (Part 2 §2).
+  ``contracts/identity-marketplace/plutus.json`` at commit ``1643583`` (the file
+  last changed in ``48312ff``; git blob ``9cf2bb0b``, sha256
+  :data:`IDENTITY_BLUEPRINT_SHA256`). Its validators are unapplied: their
+  parameters are deployment values (Part 2 §2).
 - ``blueprints/legacy-registry.plutus.json``: the deployed legacy registry
   (Apex-Fusion/vector-ai-agents ``f6ae4bb`` ``agent-registry/deploy/agent-registry/plutus.json``,
   git blob ``4c79883e``, sha256 :data:`LEGACY_BLUEPRINT_SHA256`), which an
@@ -48,7 +49,7 @@ __all__ = [
 
 IDENTITY_BLUEPRINT = "identity-marketplace.plutus.json"
 LEGACY_BLUEPRINT = "legacy-registry.plutus.json"
-IDENTITY_BLUEPRINT_SHA256 = "0d4e3ec1ba3982c4e4e60c29045cd9a0fd554ec3ee598ca77fbabeb85723f7c3"
+IDENTITY_BLUEPRINT_SHA256 = "9c8d948a2da12fa519b6f97286cbb8374c002b6bca7e4a3ef1a6d65cca51df3e"
 LEGACY_BLUEPRINT_SHA256 = "00eb21bf150b9f4ee4ded0b7a7c4779d91284cf795bde653d5702355520ad215"
 
 _CHECKSUMS = {IDENTITY_BLUEPRINT: IDENTITY_BLUEPRINT_SHA256, LEGACY_BLUEPRINT: LEGACY_BLUEPRINT_SHA256}

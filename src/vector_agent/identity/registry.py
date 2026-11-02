@@ -35,6 +35,7 @@ from vector_agent.identity.constants import (
     DAYS_30_MS,
     LEGACY_OWNER_CHANGE_LOVELACE,
     MAX_DEPTH,
+    MAX_RANGE_MS,
     MIN_RECORD_LOVELACE,
     REASON_DISPUTE_VERDICT,
     REASON_KEY_COMPROMISE,
@@ -780,16 +781,21 @@ class IdentityRegistry:
         by_party: int | None = None,
         valid_for: int = DEFAULT_VALID_FOR_S,
     ) -> BuiltTx:
-        """Revoke the identity: a tombstone with ``Revoked``. Only the controller names a successor."""
+        """Revoke the identity: a tombstone with ``Revoked``. Only the controller names a successor.
+
+        ``invalid_from`` is empty or in ``[created_at - 3,600,000, lo]`` (Part 2 §3.7), and
+        reason 1 (keyCompromise) requires it. ``created_at`` is the upper bound of the creating
+        range, so the lower bound reaches the block that created the record. Thus a revocation
+        for key compromise is possible at once after the creation.
+        """
         rec, window, plan = self._identity_spend(vector_id, valid_for)
         if reason not in REVOKE_REASONS or reason == REASON_DISPUTE_VERDICT:
             raise IdentityRuleError(f"reason {reason} is not allowed in Revoke")
         if invalid_from is None and reason == REASON_KEY_COMPROMISE:
             raise IdentityRuleError("reason 1 (keyCompromise) needs invalid_from")
-        # The pinned blueprint (b5d66a6) requires [created_at, lo]. The contract fix W4-CFIX widens
-        # it to [created_at - 1 h, lo]; keep the narrower range until the blueprint is updated.
-        if invalid_from is not None and not rec.datum.created_at <= invalid_from <= window.lo:
-            raise IdentityRuleError(f"invalid_from must be in [{rec.datum.created_at}, {window.lo}]")
+        lowest = rec.datum.created_at - MAX_RANGE_MS
+        if invalid_from is not None and not lowest <= invalid_from <= window.lo:
+            raise IdentityRuleError(f"invalid_from must be in [created_at - {MAX_RANGE_MS} = {lowest}, {window.lo}]")
         actor, author = self._actor(plan, rec.datum, by_party, RIGHT_REVOKE, window)
         s = None
         if successor is not None:

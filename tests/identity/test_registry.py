@@ -40,6 +40,7 @@ from vector_agent.identity.constants import (
     DAYS_7_MS,
     DAYS_30_MS,
     LEGACY_REGISTRY_ADDRESS,
+    MAX_RANGE_MS,
     MIN_RECORD_LOVELACE,
     PURPOSE_AUTHENTICATION,
     REASON_HOLD,
@@ -48,6 +49,7 @@ from vector_agent.identity.constants import (
     REASON_SUPERSEDED,
 )
 from vector_agent.identity.ids import allowlist_proof, blake2b_224
+from vector_agent.identity.tx import make_window
 from vector_agent.identity.types import (
     ACTIVE,
     Hold,
@@ -448,6 +450,29 @@ def test_revoke_by_party_for_key_compromise(world: World, payer: Address, agent:
     assert h(agent.accountable) in built.required_signers and h(agent.controller) not in built.required_signers
     status = record_after(world, built, agent.id).status
     assert status.by == KeyHashSigner(key_hash(agent.accountable)) and status.invalid_from == created
+
+
+def test_revoke_for_key_compromise_at_once_after_the_creation(world: World, payer: Address, agent: Agent) -> None:
+    # §3.7: the record was created in this tip's range, so lo < created_at; invalid_from is in [created_at - 1 h, lo].
+    reg = registry(world)
+    created = reg.record(agent.id).datum.created_at
+    lo = make_window(world.ctx).lo
+    assert lo < created
+    lowest = created - MAX_RANGE_MS
+    for outside in (lowest - 1, lo + 1):
+        with pytest.raises(IdentityRuleError, match="invalid_from"):
+            reg.revoke(payer, agent.id, reason=REASON_KEY_COMPROMISE, invalid_from=outside, by_party=0)
+
+    by_party = reg.revoke(payer, agent.id, reason=REASON_KEY_COMPROMISE, invalid_from=lo, by_party=0)
+    scripts_pass(world, by_party)
+    assert by_party.valid_from == lo
+    output = next(o for o in by_party.transaction.transaction_body.outputs if o.address == world.scripts.identity.address)
+    party = KeyHashSigner(key_hash(agent.accountable))
+    assert IdentityDatum.from_cbor(output.datum.cbor).status == Revoked(party, REASON_KEY_COMPROMISE, lo, lo, None)
+
+    by_controller = reg.revoke(payer, agent.id, reason=REASON_KEY_COMPROMISE, invalid_from=lowest)
+    status = record_after(world, by_controller, agent.id).status
+    assert status == Revoked(CONTROLLER_SET, REASON_KEY_COMPROMISE, lo, lowest, None)
 
 
 def test_revoke_rules(world: World, payer: Address, agent: Agent) -> None:
