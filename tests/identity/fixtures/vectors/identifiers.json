@@ -1,0 +1,79 @@
+{
+  "name": "identifiers",
+  "description": "Identifier derivation and DNS-safe form. vector-id = hex(blake2b_256(serialise(seed))), where serialise(seed) is the Plutus Data CBOR of Constr 0 [tx_id, output_index]; the DNS-safe form is RFC 4648 base32 of the 32 bytes, lowercase, without padding. The first two vectors are those of Part 1 §3.1.",
+  "specification": "docs/did-vector-method.md §3, §3.1, §3.2",
+  "vectors": [
+    {
+      "txId": "0000000000000000000000000000000000000000000000000000000000000000",
+      "outputIndex": 0,
+      "serialisedSeed": "d8799f5820000000000000000000000000000000000000000000000000000000000000000000ff",
+      "vectorId": "a2e5e227858e84f1a8f9b0c1246e6cbc9336d707d43ba43d0e1cb7c51c45f4c9",
+      "dnsSafe": "uls6ej4fr2cpdkhzwdasi3tmxsjtnvyh2q52ipiods34khcf6teq",
+      "did": "did:vector:a2e5e227858e84f1a8f9b0c1246e6cbc9336d707d43ba43d0e1cb7c51c45f4c9",
+      "legacyDid": "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:a2e5e227858e84f1a8f9b0c1246e6cbc9336d707d43ba43d0e1cb7c51c45f4c9"
+    },
+    {
+      "txId": "abababababababababababababababababababababababababababababababab",
+      "outputIndex": 24,
+      "serialisedSeed": "d8799f5820abababababababababababababababababababababababababababababababab1818ff",
+      "vectorId": "3ddd07517205dd8a745887c33a09da0e4a5d63dca1f151ceeedaeeda0551c52b",
+      "dnsSafe": "hxoqoulsaxoyu5cyq7btuco2bzff2y64uhyvdtxo3lxnubkryuvq",
+      "did": "did:vector:3ddd07517205dd8a745887c33a09da0e4a5d63dca1f151ceeedaeeda0551c52b",
+      "legacyDid": "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:3ddd07517205dd8a745887c33a09da0e4a5d63dca1f151ceeedaeeda0551c52b"
+    },
+    {
+      "txId": "0101010101010101010101010101010101010101010101010101010101010101",
+      "outputIndex": 1,
+      "serialisedSeed": "d8799f5820010101010101010101010101010101010101010101010101010101010101010101ff",
+      "vectorId": "b6a48762a8184bc6971ec578422f114982ca7781bc18477f6f26e34ed50e99d8",
+      "dnsSafe": "w2sioyvidbf4nfy6yv4eelyrjgbmu54bxqmeo73pe3ru5viothma",
+      "did": "did:vector:b6a48762a8184bc6971ec578422f114982ca7781bc18477f6f26e34ed50e99d8",
+      "legacyDid": "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:b6a48762a8184bc6971ec578422f114982ca7781bc18477f6f26e34ed50e99d8"
+    },
+    {
+      "txId": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "outputIndex": 23,
+      "serialisedSeed": "d8799f5820ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff17ff",
+      "vectorId": "df229a221c5a84f48c06d5b28a98deb6ea678c369ab166400e88dd3d2bdc7b9f",
+      "dnsSafe": "34rjuiq4lkcpjdag2wzivgg6w3vgpdbwtkywmqaordot2k64popq",
+      "did": "did:vector:df229a221c5a84f48c06d5b28a98deb6ea678c369ab166400e88dd3d2bdc7b9f",
+      "legacyDid": "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:df229a221c5a84f48c06d5b28a98deb6ea678c369ab166400e88dd3d2bdc7b9f"
+    },
+    {
+      "txId": "79b221e0383838d1436672172a26b90a49d726d1732c6f6dccd74fcf53e831ee",
+      "outputIndex": 255,
+      "serialisedSeed": "d8799f582079b221e0383838d1436672172a26b90a49d726d1732c6f6dccd74fcf53e831ee18ffff",
+      "vectorId": "425f0b89b80a6e80f781baa271eb76aa4c59c33625b463124974c502d909fc92",
+      "dnsSafe": "ijpqxcnybjxib54bxkrhd23wvjgftqzwew2ggesjotcqfwij7sja",
+      "did": "did:vector:425f0b89b80a6e80f781baa271eb76aa4c59c33625b463124974c502d909fc92",
+      "legacyDid": "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:425f0b89b80a6e80f781baa271eb76aa4c59c33625b463124974c502d909fc92"
+    },
+    {
+      "txId": "4faf373752dcdabc6e3dcd241fb2974d9466e809f8c6dca81365fee0793a4f96",
+      "outputIndex": 256,
+      "serialisedSeed": "d8799f58204faf373752dcdabc6e3dcd241fb2974d9466e809f8c6dca81365fee0793a4f96190100ff",
+      "vectorId": "07f56eabcbd2f10a6b50b0ba305e4cd7b3b09491004d1ca328679960ebf6ef30",
+      "dnsSafe": "a72w5k6l2lyqu22qwc5daxsm26z3bferabgrzizim6mwb27w54ya",
+      "did": "did:vector:07f56eabcbd2f10a6b50b0ba305e4cd7b3b09491004d1ca328679960ebf6ef30",
+      "legacyDid": "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:07f56eabcbd2f10a6b50b0ba305e4cd7b3b09491004d1ca328679960ebf6ef30"
+    },
+    {
+      "txId": "3d877459966477e16dbc2fb367c6097b7983db0759fd7c5b5cc5d9d192dfb4fc",
+      "outputIndex": 65535,
+      "serialisedSeed": "d8799f58203d877459966477e16dbc2fb367c6097b7983db0759fd7c5b5cc5d9d192dfb4fc19ffffff",
+      "vectorId": "2a6c34e50e3c5f2295562b56dafe2a181c19bffb684caa5bfb66f8ae3f606896",
+      "dnsSafe": "fjwdjziohrpsffkwfnlnv7rkdaobtp73nbgkuw73m34k4p3ancla",
+      "did": "did:vector:2a6c34e50e3c5f2295562b56dafe2a181c19bffb684caa5bfb66f8ae3f606896",
+      "legacyDid": "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:2a6c34e50e3c5f2295562b56dafe2a181c19bffb684caa5bfb66f8ae3f606896"
+    },
+    {
+      "txId": "b8180d89307f66da67e46d97df79fb0d7a68ef6a784b11346c11954ea03a5501",
+      "outputIndex": 65536,
+      "serialisedSeed": "d8799f5820b8180d89307f66da67e46d97df79fb0d7a68ef6a784b11346c11954ea03a55011a00010000ff",
+      "vectorId": "a038865d506acea51278d321cdf78e9ee3a524604a33864a9de7c8edd4fb0b8f",
+      "dnsSafe": "ua4imxkqnlhkkety2mq4354ot3r2kjdajizymsu547eo3vh3bohq",
+      "did": "did:vector:a038865d506acea51278d321cdf78e9ee3a524604a33864a9de7c8edd4fb0b8f",
+      "legacyDid": "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:a038865d506acea51278d321cdf78e9ee3a524604a33864a9de7c8edd4fb0b8f"
+    }
+  ]
+}
