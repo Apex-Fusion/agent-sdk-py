@@ -228,6 +228,23 @@ The script parameters are deployment values. The SDK applies them to the embedde
 | `VECTOR_OGMIOS_URL`, `VECTOR_KOIOS_URL`, `VECTOR_KOIOS_TOKEN` | Ledger reads. Defaults: Vector mainnet Ogmios and Koios. |
 | `VECTOR_MARKETPLACE_INDEXER_URL` | Indexer for the advert listing check of `Vaults.pay`. |
 
+## Self-Improvement module (Module-6)
+
+`vector_agent.governance` (also `vector_agent.self_improvement`) works on the Module-6 deployment that reads identity records (Part 2 §7). `Governance` builds every transaction and returns it unsigned with its signers; `GovernanceClient` runs the flows of a `VectorAgent` (lock, then create) and signs with the agent wallet.
+
+```python
+from vector_agent.governance import GovernanceClient, GovernanceDeployment
+
+gov = GovernanceClient(agent, GovernanceDeployment.from_deploy_state("deploy_state.json"))
+proposal = await gov.submit_proposal("did:vector:<64 hex>", proposal_hash, "ipfs://Qm...")
+await gov.endorse_proposal("did:vector:<other agent>", proposal["seed"])  # name the proposal by its seed
+```
+
+- Proposals, amendments, critiques and endorsements read the agent's record and its ancestors (reference inputs) over a validity range of at most one hour. `submitted_at` and `created_at` are its lower bound. The credential is the wallet key or `credential_key`: the controller or a listed key with the transaction purpose.
+- A first proposal inserts the agent's node into the activity list; later proposals continue that node.
+- Withdrawals, expiry, adoption, rejection and review extension return each stake to the credential in its datum; `settle=` burns and pays out critiques and endorsements in the same transaction.
+- The deployment values come from `VECTOR_MODULE6_*` (see `.env.example`) or the deploy state. The SDK applies them to the embedded Module-6 blueprint (vector-agent-modules `91e3823`). The new deployment is not live, so there are no defaults.
+
 ## License
 
 MIT

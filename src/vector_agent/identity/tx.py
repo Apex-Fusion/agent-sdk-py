@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 from pycardano import (
     Address,
@@ -41,8 +41,9 @@ from pycardano.serialization import RawCBOR
 from pycardano.utils import min_lovelace_post_alonzo
 
 from vector_agent.exceptions import TransactionError
+from vector_agent.identity.chain import Ledger, SlotClock
 from vector_agent.identity.constants import MAX_RANGE_MS
-from vector_agent.identity.context import IdentityContext, ScriptSource, utxo_ref
+from vector_agent.identity.context import ScriptSource, utxo_ref
 from vector_agent.identity.plutus_data import PlutusData, encode_data
 
 #: A redeemer: a value with ``to_data()``, Plutus Data, or CBOR bytes.
@@ -51,6 +52,7 @@ RedeemerValue = Any
 __all__ = [
     "DEFAULT_VALID_FOR_S",
     "BuiltTx",
+    "TxContext",
     "TxPlan",
     "Window",
     "add_signatures",
@@ -75,8 +77,21 @@ class Window:
     hi: int
 
 
+class TxContext(Protocol):
+    """What the transaction helpers read: the ledger, the slot clock and the
+    address parser. :class:`~vector_agent.identity.IdentityContext` and
+    :class:`~vector_agent.governance.GovernanceContext` have them."""
+
+    ledger: Ledger
+
+    @property
+    def clock(self) -> SlotClock: ...
+
+    def address_of(self, address: str | Address) -> Address: ...
+
+
 def make_window(
-    ctx: IdentityContext,
+    ctx: TxContext,
     *,
     valid_for: int = DEFAULT_VALID_FOR_S,
     tip_slot: int | None = None,
@@ -161,7 +176,7 @@ def _cbor(value: RedeemerValue) -> bytes:
     return encode_data(data)
 
 
-def min_lovelace(ctx: IdentityContext, output: TransactionOutput) -> int:
+def min_lovelace(ctx: TxContext, output: TransactionOutput) -> int:
     """The ledger minimum of ``output`` (protocol parameter ``coins_per_utxo_byte``)."""
     return min_lovelace_post_alonzo(output, ctx.ledger.context)
 
@@ -207,7 +222,7 @@ def add_signatures(
 
 
 def build(
-    ctx: IdentityContext,
+    ctx: TxContext,
     plan: TxPlan,
     funding_address: str | Address,
     *,
@@ -254,7 +269,8 @@ def build(
     try:
         body = builder.build(change_address=change)
     except Exception as exc:
-        raise TransactionError(f"cannot build the transaction: {exc}") from exc
+        hint = "; configure the reference-script UTxOs (VECTOR_*_REF_UTXO)" if "exceeds the max limit" in str(exc) else ""
+        raise TransactionError(f"cannot build the transaction: {exc}{hint}") from exc
     witness_set = builder.build_witness_set(remove_dup_script=True)
     transaction = Transaction(body, witness_set)
     size = len(transaction.to_cbor())

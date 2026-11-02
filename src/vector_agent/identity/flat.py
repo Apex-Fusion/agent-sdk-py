@@ -22,7 +22,7 @@ from collections.abc import Sequence
 
 from vector_agent.identity.plutus_data import PlutusData, encode_data
 
-__all__ = ["FlatError", "apply_parameter", "apply_parameters", "plutus_v3_script_hash"]
+__all__ = ["FlatError", "apply_parameter", "apply_parameter_cbor", "apply_parameters", "plutus_v3_script_hash"]
 
 PLUTUS_V3_TAG = b"\x03"
 
@@ -228,6 +228,17 @@ def _unwrap(compiled_code: bytes) -> bytes:
 
 def apply_parameter(compiled_code: bytes, parameter: PlutusData) -> bytes:
     """``compiled_code`` with one Plutus Data parameter applied, as ``aiken blueprint apply`` does."""
+    return apply_parameter_cbor(compiled_code, encode_data(parameter))
+
+
+def apply_parameter_cbor(compiled_code: bytes, data_cbor: bytes) -> bytes:
+    """``compiled_code`` with one parameter applied, given as Plutus Data CBOR.
+
+    ``aiken blueprint apply`` keeps the CBOR of its argument in the data
+    constant: a definite and an indefinite array of the same fields give
+    different scripts. Use this function when a deployment applied a CBOR form
+    other than :func:`vector_agent.identity.plutus_data.encode_data`.
+    """
     reader = _BitReader(_unwrap(bytes(compiled_code)))
     writer = _BitWriter()
     copy = _Transcoder(reader, writer)
@@ -243,7 +254,7 @@ def apply_parameter(compiled_code: bytes, parameter: PlutusData) -> bytes:
     writer.bit(1)  # type list [data]: one element ...
     writer.bits(_TYPE_DATA, 4)
     writer.bit(0)  # ... then the end of the list
-    data = encode_data(parameter)
+    data = bytes(data_cbor)
     writer.filler()
     for start in range(0, len(data), 255):
         chunk = data[start : start + 255]
