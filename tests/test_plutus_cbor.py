@@ -5,10 +5,8 @@ builtin.serialise_data() for known inputs.  Expected hex values come from
 Aiken stdlib tests (``cbor.test.ak``).
 """
 
-import hashlib
 
 import cbor2
-import pytest
 
 from vector_agent.chain.plutus_cbor import plutus_serialise_data
 

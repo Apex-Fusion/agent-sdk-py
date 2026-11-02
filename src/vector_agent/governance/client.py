@@ -27,15 +27,15 @@ from pycardano.transaction import (
 
 from vector_agent.agent import VectorAgent
 from vector_agent.chain.plutus_cbor import plutus_serialise_data
-from vector_agent.governance.types import (
-    ProposalAction,
-    CritiqueAction,
-    EndorsementAction,
-)
 from vector_agent.governance.datums import (
-    build_proposal_datum,
     build_critique_datum,
     build_endorsement_datum,
+    build_proposal_datum,
+)
+from vector_agent.governance.types import (
+    CritiqueAction,
+    EndorsementAction,
+    ProposalAction,
 )
 
 
@@ -334,7 +334,7 @@ class GovernanceClient:
             )
             _sl_ms = genesis.get("slotLength", {}).get("milliseconds", 1000)
             _st_str = genesis.get("startTime", "2025-07-09T10:38:04Z")
-            from datetime import datetime, timezone
+            from datetime import datetime
             _st_dt = datetime.fromisoformat(_st_str.replace("Z", "+00:00"))
             _sys_start_ms = int(_st_dt.timestamp() * 1000)
         except Exception:
@@ -402,7 +402,7 @@ class GovernanceClient:
             )
             slot_length_ms = genesis.get("slotLength", {}).get("milliseconds", 1000)
             start_time_str = genesis.get("startTime", "2025-07-09T10:38:04Z")
-            from datetime import datetime, timezone
+            from datetime import datetime
             start_dt = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
             system_start_ms = int(start_dt.timestamp() * 1000)
         except Exception:
@@ -564,7 +564,6 @@ class GovernanceClient:
             raise ValueError(f"Activity UTxO not found: {activity_utxo_ref}")
 
         # Decode current activity datum to get count
-        import cbor2 as cbor2_mod
         act_datum_raw = activity_utxo.output.datum.data  # RawPlutusData
         old_count = act_datum_raw.value[2]  # active_proposal_count
 

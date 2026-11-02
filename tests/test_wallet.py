@@ -2,13 +2,12 @@
 
 import json
 import tempfile
-from pathlib import Path
 
 import pytest
 
+from vector_agent.exceptions import WalletError
 from vector_agent.wallet.hd import HDWallet
 from vector_agent.wallet.skey import SkeyWallet
-from vector_agent.exceptions import WalletError
 
 
 def test_hd_wallet_from_mnemonic(sample_mnemonic):

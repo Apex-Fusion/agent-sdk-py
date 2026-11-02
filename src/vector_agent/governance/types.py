@@ -4,7 +4,7 @@ CBOR constructor tags matching the Aiken on-chain types in types.ak.
 """
 
 import cbor2
-from pycardano.plutus import PlutusData, RawPlutusData
+from pycardano.plutus import RawPlutusData
 
 
 class ProposalType:

@@ -1,10 +1,15 @@
 """Vector Agent SDK — Python SDK for the Vector blockchain.
 
-Two modes of operation:
+Modes of operation:
 - ``VectorAgent``: Standalone mode (direct PyCardano + Ogmios)
-- ``VectorAgentMCP``: MCP client mode (SSE to hosted server, or stdio to local subprocess)
+- ``VectorAgentMCP``: MCP client mode (Streamable HTTP to the hosted server, or stdio to a local subprocess)
+- ``vector_agent.identity``: identity registry (``did:vector``), attestation, delegation and vault
+  clients; they build unsigned transactions and resolve DIDs through the identity gateway
 """
 
+from vector_agent import governance as governance
+from vector_agent import identity as identity
+from vector_agent import self_improvement as self_improvement
 from vector_agent.agent import VectorAgent
 from vector_agent.agent_mcp import VectorAgentMCP
 from vector_agent.exceptions import (
@@ -29,29 +34,26 @@ from vector_agent.types import (
     VectorBalance,
 )
 
-from vector_agent import self_improvement as self_improvement  # noqa: F401 - Game 6
-from vector_agent import governance as governance  # noqa: F401 - deprecated alias of self_improvement
-
-__version__ = "0.1.11"
+__version__ = "0.2.0"
 
 __all__ = [
+    "AuditEntry",
+    "BuildTxResult",
+    "DeployContractResult",
+    "DryRunResult",
+    "InsufficientFundsError",
+    "InteractContractResult",
+    "InvalidAddressError",
+    "SpendLimitExceededError",
+    "SpendStatus",
+    "TokenBalance",
+    "TokenTxResult",
+    "TransactionError",
+    "TxResult",
+    "TxSummary",
     "VectorAgent",
     "VectorAgentMCP",
     "VectorBalance",
-    "TokenBalance",
-    "TxResult",
-    "TokenTxResult",
-    "SpendStatus",
-    "AuditEntry",
-    "BuildTxResult",
-    "DryRunResult",
-    "TxSummary",
-    "DeployContractResult",
-    "InteractContractResult",
     "VectorError",
-    "InsufficientFundsError",
-    "SpendLimitExceededError",
-    "TransactionError",
     "WalletError",
-    "InvalidAddressError",
 ]

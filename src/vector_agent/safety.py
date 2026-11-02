@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from vector_agent.exceptions import SpendLimitExceededError
 from vector_agent.types import AuditEntry, SpendStatus
@@ -28,7 +28,7 @@ class SafetyLayer:
 
     @staticmethod
     def _today() -> str:
-        return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        return datetime.now(UTC).strftime("%Y-%m-%d")
 
     def _maybe_reset_daily(self):
         today = self._today()
@@ -71,7 +71,7 @@ class SafetyLayer:
         self._daily_spent += amount_lovelace
         self._audit_log.append(
             AuditEntry(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 tx_hash=tx_hash,
                 amount_lovelace=amount_lovelace,
                 recipient=recipient,
@@ -84,7 +84,7 @@ class SafetyLayer:
         self._maybe_reset_daily()
         remaining = max(0, self.daily_limit - self._daily_spent)
         # Next reset is midnight UTC
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         reset = now.replace(hour=0, minute=0, second=0, microsecond=0)
         if reset <= now:
             reset += timedelta(days=1)

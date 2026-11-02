@@ -177,6 +177,57 @@ All settings can be passed as constructor arguments or read from environment var
 
 See [.env.example](.env.example) for a template.
 
+## Identity registry (`did:vector`)
+
+`vector_agent.identity` has clients for the Vector identity registry and the contracts that use it. The builders read the ledger (Ogmios and Koios) and return an **unsigned** transaction with every key hash that must sign it. The SDK never signs: each key holder adds a witness in turn.
+
+```python
+from vector_agent.identity import (
+    IdentityContext, IdentityRegistry, KeyHashSigner, PartySpec, Role, add_signatures,
+)
+
+ctx = IdentityContext.connect()          # IdentityConfig.from_env(), Vector mainnet endpoints
+registry = IdentityRegistry(ctx)
+built = registry.register(
+    "addr1...",                          # pays the fee and the 10 AP3X deposit
+    controller=controller_public_key,     # 32-byte Ed25519 key
+    name="My agent",
+    endpoint="https://agent.example.org/mcp",
+    capabilities=["llm.chat"],
+    parties=[PartySpec(Role.ACCOUNTABLE, KeyHashSigner(accountable_key_hash))],
+)
+print(built.created_id, built.required_signers)    # the new vector-id and the signers
+signed = add_signatures(built.transaction, [payer_key, controller_key, accountable_key])
+ctx.ledger.context.submit_tx(signed)
+
+view = registry.current_record(built.created_id)   # the gateway's view (effective status, keys, ...)
+```
+
+| Client | Operations |
+|---|---|
+| `IdentityRegistry` | `register` (with `parent=` for a subagent), `adopt`, `update`, `change_controller`, `suspend`, `unsuspend`, `revoke`, `retire`, `reclaim`, `set_successor`, `start_recovery`, `cancel_recovery`, `complete_recovery`, `end_subagents`; reads `record`, `resolve`, `current_record` |
+| `Attestations` | `attest`, `revoke`, `contest`, `withdraw`; `get` |
+| `Delegations` | `delegate`, `undelegate`; `get` |
+| `Vaults` | `open`, `pay`, `close`; `get`, `list` |
+| `IdentityGateway` | `resolve` (HTTPS binding `GET /1.0/identifiers/{did}`), `current_record` |
+
+A builder refuses a transaction that the contract would reject: it raises `IdentityRuleError` with the broken rule. A missing record raises `IdentityLookupError`.
+
+The script parameters are deployment values. The SDK applies them to the embedded unapplied scripts:
+
+| Environment variable | Description |
+|---|---|
+| `VECTOR_IDENTITY_LEGACY_ROOT` | Allowlist Merkle root (64 hex). Required for transactions. |
+| `VECTOR_IDENTITY_CONFIG_SEED` | Seed of the configuration policy, `<tx id>#<index>`. Required for transactions. |
+| `VECTOR_IDENTITY_POLICY_ID` | Optional check: the identity policy ID that the two values above must give. |
+| `VECTOR_IDENTITY_LEGACY_HASH` | Legacy registry hash. Default `be1a0a29…2c01`. |
+| `VECTOR_IDENTITY_REF_UTXO`, `VECTOR_ATTESTATION_REF_UTXO`, `VECTOR_DELEGATION_REF_UTXO`, `VECTOR_VAULT_REF_UTXO`, `VECTOR_LEGACY_REGISTRY_REF_UTXO` | Reference-script outputs, `<tx id>#<index>`. Without one, the transaction carries the script. |
+| `VECTOR_MODULE1_REF_UTXO` | Reference script of Module-1 `identity_party`; needed only to appoint Module-1 as a party. |
+| `VECTOR_IDENTITY_CONFIG_UTXO` | The configuration record. Default: found at the configuration address. |
+| `VECTOR_IDENTITY_GATEWAY_URL` | Default `https://id.vector.apexfusion.org`. |
+| `VECTOR_OGMIOS_URL`, `VECTOR_KOIOS_URL`, `VECTOR_KOIOS_TOKEN` | Ledger reads. Defaults: Vector mainnet Ogmios and Koios. |
+| `VECTOR_MARKETPLACE_INDEXER_URL` | Indexer for the advert listing check of `Vaults.pay`. |
+
 ## License
 
 MIT

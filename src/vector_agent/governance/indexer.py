@@ -7,13 +7,11 @@ Phase 1.0: All queries are live UTxO scans via Ogmios.
 No separate database required.
 """
 
-import cbor2
-from typing import Optional
 
+import cbor2
 from pycardano import Address, Network
 from pycardano.hash import ScriptHash
 from pycardano.plutus import RawPlutusData
-
 
 # CBOR constructor tag offsets for Plutus sum types
 _PROPOSAL_STATE_NAMES = {
@@ -45,7 +43,7 @@ _CRITIQUE_TYPE_NAMES = {
 }
 
 
-def _decode_datum(raw_datum) -> Optional[dict]:
+def _decode_datum(raw_datum) -> dict | None:
     """Decode a PyCardano inline datum into a Python dict via CBOR."""
     if raw_datum is None:
         return None
@@ -63,7 +61,7 @@ def _decode_datum(raw_datum) -> Optional[dict]:
         return None
 
 
-def _decode_proposal(datum_dict: dict) -> Optional[dict]:
+def _decode_proposal(datum_dict: dict) -> dict | None:
     """Parse a ProposalDatum from a decoded CBOR constructor."""
     if datum_dict is None:
         return None
@@ -103,7 +101,7 @@ def _decode_proposal(datum_dict: dict) -> Optional[dict]:
         return None
 
 
-def _decode_critique(datum_dict: dict) -> Optional[dict]:
+def _decode_critique(datum_dict: dict) -> dict | None:
     """Parse a CritiqueDatum from a decoded CBOR constructor."""
     if datum_dict is None:
         return None
@@ -145,7 +143,7 @@ def _decode_critique(datum_dict: dict) -> Optional[dict]:
         return None
 
 
-def _decode_endorsement(datum_dict: dict) -> Optional[dict]:
+def _decode_endorsement(datum_dict: dict) -> dict | None:
     """Parse a GovernanceEndorsementDatum from a decoded CBOR constructor."""
     if datum_dict is None:
         return None
@@ -213,9 +211,9 @@ class GovernanceIndexer:
 
     async def get_proposals(
         self,
-        state: Optional[str] = None,
-        proposal_type: Optional[str] = None,
-        proposer_did: Optional[str] = None,
+        state: str | None = None,
+        proposal_type: str | None = None,
+        proposer_did: str | None = None,
         sort_by: str = "submitted_at",
         descending: bool = True,
     ) -> list[dict]:
@@ -277,8 +275,8 @@ class GovernanceIndexer:
 
     async def get_critiques(
         self,
-        proposal_tx_hash: Optional[str] = None,
-        proposal_output_index: Optional[int] = None,
+        proposal_tx_hash: str | None = None,
+        proposal_output_index: int | None = None,
     ) -> list[dict]:
         """Query critiques, optionally filtered by the proposal they reference."""
         if not self._critique_addr:
@@ -311,8 +309,8 @@ class GovernanceIndexer:
 
     async def get_endorsements(
         self,
-        proposal_tx_hash: Optional[str] = None,
-        proposal_output_index: Optional[int] = None,
+        proposal_tx_hash: str | None = None,
+        proposal_output_index: int | None = None,
     ) -> list[dict]:
         """Query endorsements, optionally filtered by the proposal they reference."""
         if not self._endorsement_addr:

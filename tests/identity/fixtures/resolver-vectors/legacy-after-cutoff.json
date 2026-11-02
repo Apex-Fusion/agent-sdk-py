@@ -1,0 +1,217 @@
+{
+  "name": "legacy-after-cutoff",
+  "description": "The same legacy record at a tip after the cutoff slot: Suspended (unaccountable). A legacy identifier minted after the cutoff slot is NOT_FOUND.",
+  "specification": "docs/did-vector-method.md",
+  "comparison": "Resolve each request against the ledger (as of its tip) and the settings. The JCS (RFC 8785) serialisation of the result must equal that of `result`, except the error `title` (Part 1 Section 8.2).",
+  "settings": {
+    "network": {
+      "networkMagic": 764824073,
+      "systemStart": 1756485600,
+      "slotLength": 1,
+      "securityParam": 2160
+    },
+    "registries": {
+      "identity": {
+        "policyId": "bb4727fb54a4b177b86e75c9a5ff7ed8d71920e8841be969f37a8b00",
+        "address": "addr1wxa5wflm2jjtzaacde6unf0l0mvdwxfqazzph6tf7dagkqqm2r037"
+      },
+      "legacy": {
+        "policyId": "be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01",
+        "address": "addr1wxlp5z3fztdpsp6ha57dvx6khw82kqvgcxwu8s8rjykjcqghprf42"
+      },
+      "cutoffSlot": 5000
+    }
+  },
+  "ledger": {
+    "tip": {
+      "blockHeight": 1000,
+      "blockHash": "a8f621c8c6da8ec22be95f0ad5f67e672f199764bd40bbbc5d90dbe14d088fd3",
+      "slot": 10000
+    },
+    "transactions": [
+      {
+        "txHash": "56f73ce7225c86bb063e074a5b1a874454b953615c30bdb435b9f06537949bcc",
+        "blockHash": "56afe9ae2ba5e60144b2934735ff8647ac243702bcc46122e1329f63dadebe30",
+        "blockHeight": 200,
+        "txIndex": 0,
+        "slot": 2000,
+        "inputs": [
+          {
+            "txHash": "34abf56faf54c186fb3c50ae4a0646c7e6fc3be97f6d9948bf467b23d0507619",
+            "outputIndex": 0,
+            "address": "addr1q8pyltzvw2vvp29g95ndr6tukpzyc7qtaxq8f400c2kuq83t63ar50qelzpf59teke4kuythtxzgx6mxtv75l79xryvqhagm80",
+            "assets": []
+          }
+        ],
+        "outputs": [
+          {
+            "outputIndex": 0,
+            "address": "addr1wxlp5z3fztdpsp6ha57dvx6khw82kqvgcxwu8s8rjykjcqghprf42",
+            "lovelace": "2000000",
+            "assets": [
+              {
+                "policyId": "be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01",
+                "assetName": "de2766e0536671bfa246c77f5cc0cee1df664e892bce5f988a804176911c72e4",
+                "quantity": "1"
+              }
+            ],
+            "inlineDatum": "d8799fd8799f581ca7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6deff4c4c6567616379204167656e74582041207265636f7264206f6620746865206c65676163792072656769737472792e9f53646f63756d656e742d65787472616374696f6eff46637573746f6d582068747470733a2f2f6c65676163792e6578616d706c652e6f72672f6167656e741b00000198d9c19800ff",
+            "datumHash": "07329f101f53e3eb00d0c311574d2d79e7046a9c946173e3747ad732d77790e8",
+            "hasReferenceScript": false
+          },
+          {
+            "outputIndex": 1,
+            "address": "addr1q8pyltzvw2vvp29g95ndr6tukpzyc7qtaxq8f400c2kuq83t63ar50qelzpf59teke4kuythtxzgx6mxtv75l79xryvqhagm80",
+            "lovelace": "5000000",
+            "assets": [],
+            "inlineDatum": null,
+            "datumHash": null,
+            "hasReferenceScript": false
+          }
+        ],
+        "mint": [
+          {
+            "policyId": "be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01",
+            "assetName": "de2766e0536671bfa246c77f5cc0cee1df664e892bce5f988a804176911c72e4",
+            "quantity": "1"
+          }
+        ],
+        "vkeyWitnesses": [
+          "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca"
+        ]
+      },
+      {
+        "txHash": "a1979ac06076b6412c21f7882e00bcf0baf3f790ea4db800ac36b70aeeb5289e",
+        "blockHash": "c60e6eb931eb2b36e74b560806b4a74894ac7d966aa534f853f3a74dd8ab035c",
+        "blockHeight": 510,
+        "txIndex": 0,
+        "slot": 5100,
+        "inputs": [
+          {
+            "txHash": "37e484e2d5df226bc6784a88729e904d7a8116727509556d1d03b0116ae677a2",
+            "outputIndex": 0,
+            "address": "addr1q8pyltzvw2vvp29g95ndr6tukpzyc7qtaxq8f400c2kuq83t63ar50qelzpf59teke4kuythtxzgx6mxtv75l79xryvqhagm80",
+            "assets": []
+          }
+        ],
+        "outputs": [
+          {
+            "outputIndex": 0,
+            "address": "addr1wxlp5z3fztdpsp6ha57dvx6khw82kqvgcxwu8s8rjykjcqghprf42",
+            "lovelace": "2000000",
+            "assets": [
+              {
+                "policyId": "be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01",
+                "assetName": "b29d0dabff595c2fdc5e7c1cc8b8d69083e766732547e42f5737ea82f9e09a7f",
+                "quantity": "1"
+              }
+            ],
+            "inlineDatum": "d8799fd8799f581ca7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6deff4c4c6567616379204167656e74582041207265636f7264206f6620746865206c65676163792072656769737472792e9f53646f63756d656e742d65787472616374696f6eff46637573746f6d582068747470733a2f2f6c65676163792e6578616d706c652e6f72672f6167656e741b00000198d9c19800ff",
+            "datumHash": "07329f101f53e3eb00d0c311574d2d79e7046a9c946173e3747ad732d77790e8",
+            "hasReferenceScript": false
+          },
+          {
+            "outputIndex": 1,
+            "address": "addr1q8pyltzvw2vvp29g95ndr6tukpzyc7qtaxq8f400c2kuq83t63ar50qelzpf59teke4kuythtxzgx6mxtv75l79xryvqhagm80",
+            "lovelace": "5000000",
+            "assets": [],
+            "inlineDatum": null,
+            "datumHash": null,
+            "hasReferenceScript": false
+          }
+        ],
+        "mint": [
+          {
+            "policyId": "be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01",
+            "assetName": "b29d0dabff595c2fdc5e7c1cc8b8d69083e766732547e42f5737ea82f9e09a7f",
+            "quantity": "1"
+          }
+        ],
+        "vkeyWitnesses": [
+          "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca"
+        ]
+      }
+    ],
+    "datums": {}
+  },
+  "requests": [
+    {
+      "did": "did:vector:de2766e0536671bfa246c77f5cc0cee1df664e892bce5f988a804176911c72e4",
+      "options": {},
+      "httpStatus": 200,
+      "result": {
+        "didDocument": {
+          "@context": "https://www.w3.org/ns/did/v1.1",
+          "assertionMethod": [
+            "#a7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6de"
+          ],
+          "authentication": [
+            "#a7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6de"
+          ],
+          "capabilityInvocation": [
+            "#a7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6de"
+          ],
+          "id": "did:vector:de2766e0536671bfa246c77f5cc0cee1df664e892bce5f988a804176911c72e4",
+          "verificationMethod": [
+            {
+              "controller": "did:vector:de2766e0536671bfa246c77f5cc0cee1df664e892bce5f988a804176911c72e4",
+              "id": "did:vector:de2766e0536671bfa246c77f5cc0cee1df664e892bce5f988a804176911c72e4#a7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6de",
+              "publicKeyMultibase": "z6Mkfmm57fsb6VL7zVusP8zeA9SYkCKdvUhby2G7Yh8vvQ1P",
+              "type": "Multikey"
+            }
+          ]
+        },
+        "didDocumentMetadata": {
+          "canonicalId": "did:vector:de2766e0536671bfa246c77f5cc0cee1df664e892bce5f988a804176911c72e4",
+          "created": "2025-08-29T17:13:20Z",
+          "equivalentId": [
+            "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:de2766e0536671bfa246c77f5cc0cee1df664e892bce5f988a804176911c72e4"
+          ],
+          "vectorLedger": {
+            "blockHash": "56afe9ae2ba5e60144b2934735ff8647ac243702bcc46122e1329f63dadebe30",
+            "blockHeight": 200,
+            "confirmations": 800,
+            "outputIndex": 0,
+            "slot": 2000,
+            "txId": "56f73ce7225c86bb063e074a5b1a874454b953615c30bdb435b9f06537949bcc"
+          },
+          "vectorOrigin": "legacy",
+          "vectorProfile": {
+            "capabilities": [
+              "document-extraction"
+            ],
+            "createdAt": "2025-08-29T17:13:20Z",
+            "description": "A record of the legacy registry.",
+            "endpoint": "https://legacy.example.org/agent",
+            "framework": "custom",
+            "name": "Legacy Agent"
+          },
+          "vectorStatus": {
+            "effective": "suspended",
+            "effectiveReason": "unaccountable",
+            "status": "active"
+          },
+          "versionId": "0"
+        },
+        "didResolutionMetadata": {
+          "contentType": "application/did"
+        }
+      }
+    },
+    {
+      "did": "did:vector:b29d0dabff595c2fdc5e7c1cc8b8d69083e766732547e42f5737ea82f9e09a7f",
+      "options": {},
+      "httpStatus": 404,
+      "result": {
+        "didDocument": null,
+        "didDocumentMetadata": {},
+        "didResolutionMetadata": {
+          "error": {
+            "title": "DID not found: the legacy registry minted the identifier at or after the cutoff slot",
+            "type": "https://www.w3.org/ns/did#NOT_FOUND"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -4,7 +4,7 @@
 the classes are identical.
 """
 
-from vector_agent.governance import blueprint, client, datums, indexer, types  # noqa: F401
+from vector_agent.governance import blueprint, client, datums, indexer, types
 from vector_agent.governance.client import GovernanceClient as SelfImprovementClient
 from vector_agent.governance.indexer import GovernanceIndexer as SelfImprovementIndexer
 
