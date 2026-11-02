@@ -130,3 +130,14 @@ async def test_the_spend_limit_applies_to_locks(gw: GovWorld, alice: GovAgent) -
     with pytest.raises(SpendLimitExceededError):
         await gov.submit_proposal(alice.did, blake2b_256(b"proposal"), "ipfs://proposal")
     assert gov.agent.context.submitted == []
+
+
+@pytest.mark.parametrize(
+    "koios_url",
+    ["https://v2.koios.vector.testnet.apexfusion.org/", "https://v2.koios.vector.testnet.apexfusion.org/api/v1"],
+)
+def test_the_koios_url_of_the_agent_in_both_forms(gw: GovWorld, alice: GovAgent, koios_url: str) -> None:
+    agent = StandInAgent(gw, alice)
+    agent._koios_url = koios_url
+    gov = GovernanceClient(agent, gw.deployment)
+    assert gov.ctx.ledger._koios_url == "https://v2.koios.vector.testnet.apexfusion.org/api/v1"

@@ -94,7 +94,7 @@ class GovernanceClient:
         if ledger is None:
             ledger = OgmiosKoiosLedger(
                 ogmios_url=agent._ogmios_url,
-                koios_url=os.environ.get("VECTOR_KOIOS_URL") or DEFAULT_KOIOS_URL,
+                koios_url=getattr(agent, "_koios_url", None) or os.environ.get("VECTOR_KOIOS_URL") or DEFAULT_KOIOS_URL,
                 koios_token=os.environ.get("VECTOR_KOIOS_TOKEN") or None,
                 context=agent.context,
             )

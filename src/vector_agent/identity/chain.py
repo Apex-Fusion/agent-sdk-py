@@ -171,7 +171,10 @@ class OgmiosKoiosLedger:
         timeout: float = 30.0,
     ) -> None:
         self._ogmios_url = ogmios_url.rstrip("/")
-        self._koios_url = koios_url.rstrip("/")
+        # VECTOR_KOIOS_URL is the Koios base for VectorAgent (it appends /api/v1/...)
+        # and the API root here; accept both forms.
+        koios_root = koios_url.rstrip("/")
+        self._koios_url = koios_root if koios_root.endswith("/api/v1") else f"{koios_root}/api/v1"
         self._koios_headers = {"Authorization": f"Bearer {koios_token}"} if koios_token else {}
         self._timeout = timeout
         if context is None:
