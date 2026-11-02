@@ -93,6 +93,9 @@ class Ledger(Protocol):
     def token_utxos(self, policy_id: bytes, asset_name: bytes) -> list[UTxO]:
         """The unspent outputs that hold the token ``policy_id.asset_name``."""
 
+    def reward_balance(self, script_hash: bytes) -> int | None:
+        """The reward balance of the stake credential ``Script(script_hash)``; None when not registered."""
+
 
 def _script_from_ogmios(raw: dict | None):
     if not raw:
@@ -234,3 +237,12 @@ class OgmiosKoiosLedger:
             if not row.get("is_spent", False)
         ]
         return [u for u in self.utxos_by_refs(refs) if holds_token(u, policy_id, asset_name)]
+
+    def reward_balance(self, script_hash: bytes) -> int | None:
+        result = self._ogmios("queryLedgerState/rewardAccountSummaries", {"scripts": [script_hash.hex()]})
+        # Ogmios v6 answers a list of {from, credential, rewards: {ada: {lovelace}}, ...}.
+        entries = result if isinstance(result, list) else list((result or {}).values())
+        for entry in entries:
+            if entry.get("credential", script_hash.hex()) == script_hash.hex():
+                return int(entry["rewards"]["ada"]["lovelace"])
+        return None

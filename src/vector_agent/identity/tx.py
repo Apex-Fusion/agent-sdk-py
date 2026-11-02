@@ -110,7 +110,7 @@ class TxPlan:
     inputs: list[UTxO] = field(default_factory=list)
     spends: list[_ScriptSpend] = field(default_factory=list)
     mints: list[tuple[ScriptSource, dict[bytes, int], bytes]] = field(default_factory=list)
-    withdrawals: list[tuple[ScriptSource, bytes]] = field(default_factory=list)
+    withdrawals: list[tuple[ScriptSource, bytes, int]] = field(default_factory=list)
     reference_inputs: list[UTxO] = field(default_factory=list)
     outputs: list[TransactionOutput] = field(default_factory=list)
     signers: list[bytes] = field(default_factory=list)
@@ -125,9 +125,14 @@ class TxPlan:
     def mint(self, source: ScriptSource, assets: dict[bytes, int], redeemer: RedeemerValue) -> None:
         self.mints.append((source, dict(assets), _cbor(redeemer)))
 
-    def withdraw_zero(self, source: ScriptSource, redeemer: RedeemerValue) -> None:
-        """A withdrawal of 0 from the script's reward account (approval by a stake script)."""
-        self.withdrawals.append((source, _cbor(redeemer)))
+    def withdraw(self, source: ScriptSource, redeemer: RedeemerValue, amount: int) -> None:
+        """A withdrawal from the script's reward account (approval by a stake script).
+
+        ``amount`` must be the whole current reward balance: the ledger rejects any other amount.
+        """
+        if amount < 0:
+            raise ValueError("a withdrawal amount is not negative")
+        self.withdrawals.append((source, _cbor(redeemer), amount))
 
     def reference(self, *utxos: UTxO) -> None:
         known = {utxo_ref(u) for u in self.reference_inputs}
@@ -234,9 +239,9 @@ def build(
         builder.mint = mint
     if plan.withdrawals:
         rewards = {}
-        for source, redeemer in plan.withdrawals:
+        for source, redeemer, amount in plan.withdrawals:
             reward = Address(staking_part=ScriptHash(bytes(source.script_hash)), network=Network.MAINNET)
-            rewards[reward.to_primitive()] = 0
+            rewards[reward.to_primitive()] = amount
             builder.add_withdrawal_script(source.argument, Redeemer(RawCBOR(redeemer)))
         builder.withdrawals = Withdrawals(rewards)
     for utxo in plan.reference_inputs:

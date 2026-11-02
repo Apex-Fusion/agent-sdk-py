@@ -53,7 +53,7 @@ def delegation(world: World, payer: Address, agent: Agent, limit: ValueLimit) ->
     return built.created_id
 
 
-def advert(world: World, supplier: Agent, *, price: int = 5_000_000) -> OutputReference:
+def advert(world: World, supplier: Agent, *, price: int = 5_000_000, bonds: int = 1_000_000) -> OutputReference:
     datum = AdvertDatum(
         supplier_pkh=key_hash(supplier.transaction_key),
         capability_id=b"llm.chat",
@@ -61,8 +61,8 @@ def advert(world: World, supplier: Agent, *, price: int = 5_000_000) -> OutputRe
         max_output_tokens=4096,
         max_processing_ms=60_000,
         price_lovelace=price,
-        supplier_bond_lovelace=1_000_000,
-        buyer_bond_lovelace=1_000_000,
+        supplier_bond_lovelace=bonds,
+        buyer_bond_lovelace=bonds,
         endpoint_url=b"https://supplier.example.org/v1",
         detail_uri=b"ipfs://detail",
         detail_hash=bytes(32),

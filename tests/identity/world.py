@@ -125,6 +125,8 @@ class World(ChainContext):
             refs[f"{name}_ref"] = utxo_ref(utxo)
         module1_script = PlutusV3Script(ALWAYS_OK_V3)
         self.module1 = module1_hash = bytes(_script_hash(module1_script))
+        #: Registered script stake credentials and their reward balances (Module-1 starts at 0).
+        self.rewards: dict[bytes, int] = {module1_hash: 0}
         refs["module1_ref"] = utxo_ref(self.put(TransactionOutput(ZERO_KEY_ADDRESS, 10_000_000, script=module1_script)))
         config_value = Value(
             2_000_000,
@@ -201,6 +203,9 @@ class World(ChainContext):
             if bundle and bundle.get(AssetName(asset_name), 0) > 0:
                 out.append(utxo)
         return out
+
+    def reward_balance(self, script_hash: bytes) -> int | None:
+        return self.rewards.get(bytes(script_hash))
 
     # ------------------------------------------------------------------
     # Test helpers

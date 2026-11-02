@@ -189,7 +189,7 @@ from vector_agent.identity import (
 ctx = IdentityContext.connect()          # IdentityConfig.from_env(), Vector mainnet endpoints
 registry = IdentityRegistry(ctx)
 built = registry.register(
-    "addr1...",                          # pays the fee and the 10 AP3X deposit
+    "addr1...",                          # pays the fee and the deposit: max(10 AP3X, ledger minimum)
     controller=controller_public_key,     # 32-byte Ed25519 key
     name="My agent",
     endpoint="https://agent.example.org/mcp",

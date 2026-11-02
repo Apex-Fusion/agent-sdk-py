@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import httpx
 from pycardano import Address, TransactionOutput, UTxO
@@ -266,8 +266,6 @@ class Vaults:
             if len(job.prompt_hash) != 32:
                 raise IdentityRuleError("prompt_hash is a 32-byte hash")
             job_total = advert.price_lovelace + advert.buyer_bond_lovelace + advert.supplier_bond_lovelace
-            if job_total > MAX_ESCROW_LOVELACE:
-                raise IdentityRuleError("payment + bonds exceed 10,000 AP3X (F-29)")
             deliver_by = posted_at + advert.max_processing_ms + NETWORK_BUFFER_MS
             if deliver_by > window.hi + DAYS_7_MS:
                 raise IdentityRuleError("deliver_by must be at most 7 days after hi")
@@ -289,9 +287,20 @@ class Vaults:
                 agent_id=advert.agent_id,
                 refund=refund,
             )
-            output = TransactionOutput(scripts.escrow.address, job_total, datum=RawCBOR(escrow.to_cbor()))
-            output.amount = max(job_total, min_lovelace(ctx, output))
-            total += output.amount
+            # The escrow output's AP3X must equal payment + both bonds; a ledger-minimum top-up
+            # goes into the buyer bond, which returns to the buyer (contract fix W4-CFIX).
+            for _ in range(3):
+                output = TransactionOutput(scripts.escrow.address, job_total, datum=RawCBOR(escrow.to_cbor()))
+                top_up = min_lovelace(ctx, output) - job_total
+                if top_up <= 0:
+                    break
+                escrow = replace(escrow, buyer_bond_lovelace=escrow.buyer_bond_lovelace + top_up)
+                job_total += top_up
+            else:
+                raise IdentityRuleError("cannot size the escrow output to the ledger minimum")
+            if job_total > MAX_ESCROW_LOVELACE:
+                raise IdentityRuleError("payment + bonds exceed 10,000 AP3X (F-29)")
+            total += job_total
             plan.output(output)
 
         limit = d.value

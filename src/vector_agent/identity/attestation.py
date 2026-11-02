@@ -213,7 +213,7 @@ class Attestations:
         links: Sequence[Link] = (),
         sign_envelope: Callable[[bytes], bytes] | None = None,
         seed: OutputReference | None = None,
-        deposit: int = MIN_ATTESTATION_LOVELACE,
+        deposit: int | None = None,
         valid_for: int = DEFAULT_VALID_FOR_S,
     ) -> BuiltTx:
         """Issue an attestation about ``subject``; the new token name is ``BuiltTx.created_id``.
@@ -283,11 +283,11 @@ class Attestations:
                 raise IdentityRuleError("sign_envelope did not return a valid Ed25519 signature of the issuer key")
         validate_attestation(datum)
         plan.mint(ctx.script_source("attestation"), {attestation_id: 1}, Attest(seed_ref))
-        output = self._output(attestation_id, datum, deposit)
+        output = self._output(attestation_id, datum, MIN_ATTESTATION_LOVELACE if deposit is None else deposit)
         floor = max(MIN_ATTESTATION_LOVELACE, min_lovelace(ctx, output))
-        if deposit < floor:
+        if deposit is not None and deposit < floor:
             raise IdentityRuleError(f"an attestation holds at least {floor} base units")
-        plan.output(output)
+        plan.output(self._output(attestation_id, datum, floor if deposit is None else deposit))
         return build(ctx, plan, funding_address)
 
     def revoke(

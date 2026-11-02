@@ -245,25 +245,42 @@ class IdentityRegistry:
             raise IdentityRuleError(f"{what}: Module-1 acts only through its own verdict transactions")
 
     def _record_output(
-        self, plan: TxPlan, vector_id: bytes, datum: IdentityDatum, lovelace: int, *, live_floor: bool
+        self,
+        plan: TxPlan,
+        vector_id: bytes,
+        datum: IdentityDatum,
+        lovelace: int | None,
+        *,
+        live_floor: bool,
+        explicit: bool = False,
     ) -> None:
+        """Add the record output. Its AP3X is ``lovelace`` raised to the floor: the ledger
+        minimum of this output, and at least 10 AP3X while live. ``None`` gives the floor; an
+        ``explicit`` amount below the floor is refused."""
         scripts = self.ctx.scripts
         m1 = None
         if any(isinstance(p.signer, ScriptSigner) for p in datum.parties):
-            config = self.ctx.config_record
-            if config is None:
-                raise IdentityLookupError("the record names Module-1, but the configuration record is missing")
-            plan.reference(config[0])
-            m1 = config[1]
+            m1 = self._reference_config(plan)
         validate_identity_datum(datum, m1)
-        value = Value(
-            lovelace, MultiAsset({ScriptHash(scripts.identity.hash): Asset({AssetName(vector_id): 1})})
-        )
-        output = TransactionOutput(scripts.identity.address, value, datum=RawCBOR(datum.to_cbor()))
-        floor = max(min_lovelace(self.ctx, output), MIN_RECORD_LOVELACE if live_floor else 0)
-        if lovelace < floor:
-            raise IdentityRuleError(f"the record output needs at least {floor} base units, got {lovelace}")
-        plan.output(output)
+        token = MultiAsset({ScriptHash(scripts.identity.hash): Asset({AssetName(vector_id): 1})})
+        raw = RawCBOR(datum.to_cbor())
+        sizing = TransactionOutput(scripts.identity.address, Value(MIN_RECORD_LOVELACE, token), datum=raw)
+        floor = max(min_lovelace(self.ctx, sizing), MIN_RECORD_LOVELACE if live_floor else 0)
+        if lovelace is None:
+            lovelace = floor
+        elif lovelace < floor:
+            if explicit:
+                raise IdentityRuleError(f"the record output needs at least {floor} base units, got {lovelace}")
+            lovelace = floor
+        plan.output(TransactionOutput(scripts.identity.address, Value(lovelace, token), datum=raw))
+
+    def _reference_config(self, plan: TxPlan) -> bytes:
+        """Add the configuration record as a reference input and return ``M1``."""
+        config = self.ctx.config_record
+        if config is None:
+            raise IdentityLookupError("the record names Module-1, but the configuration record is missing")
+        plan.reference(config[0])
+        return config[1]
 
     def _min_record_lovelace(self, vector_id: bytes, datum: IdentityDatum) -> int:
         scripts = self.ctx.scripts
@@ -305,7 +322,12 @@ class IdentityRegistry:
             raise IdentityRuleError("Module-1 consents only with the role's highest rights, not_before <= lo, "
             "no not_after and no removal_after")
         if not plan.withdrawals:
-            plan.withdraw_zero(self.ctx.module1_source(), MODULE1_CONSENT)
+            source = self.ctx.module1_source()
+            balance = self.ctx.ledger.reward_balance(m1)
+            if balance is None:
+                raise IdentityLookupError("the stake credential of Module-1 is not registered: it cannot approve")
+            # The ledger accepts only the whole reward balance, and anybody can add to it: read it now.
+            plan.withdraw(source, MODULE1_CONSENT, balance)
 
     def _identity_spend(
         self, vector_id: str | bytes, valid_for: int, *, allow_terminal: bool = False, live_only: bool = True
@@ -325,12 +347,15 @@ class IdentityRegistry:
         rec: AuthenticOutput[IdentityDatum],
         redeemer: IdentitySpend,
         new: IdentityDatum,
-        lovelace: int,
+        lovelace: int | None,
         *,
         live_floor: bool,
+        explicit: bool = False,
     ) -> BuiltTx:
+        if any(isinstance(p.signer, ScriptSigner) for p in rec.datum.parties):
+            self._reference_config(plan)  # every spend of a record with a Module-1 party reads M1
         plan.spend(rec.utxo, self.ctx.script_source("identity"), redeemer)
-        self._record_output(plan, rec.id, new, lovelace, live_floor=live_floor)
+        self._record_output(plan, rec.id, new, lovelace, live_floor=live_floor, explicit=explicit)
         return build(self.ctx, plan, funding_address)
 
     def _successor(self, plan: TxPlan, successor: str | bytes, vector_id: bytes) -> bytes:
@@ -367,7 +392,7 @@ class IdentityRegistry:
         guardian_threshold: int = 0,
         parent: str | bytes | None = None,
         seed: OutputReference | None = None,
-        deposit: int = MIN_RECORD_LOVELACE,
+        deposit: int | None = None,
         valid_for: int = DEFAULT_VALID_FOR_S,
     ) -> BuiltTx:
         """Register a new record; with ``parent``, a subagent of that record.
@@ -419,7 +444,7 @@ class IdentityRegistry:
         )
         self._creation_checks(plan, record, window)
         plan.mint(ctx.script_source("identity"), {vector_id: 1}, Register(seed))
-        self._record_output(plan, vector_id, record, deposit, live_floor=True)
+        self._record_output(plan, vector_id, record, deposit, live_floor=True, explicit=deposit is not None)
         return build(ctx, plan, funding_address)
 
     def adopt(
@@ -440,7 +465,7 @@ class IdentityRegistry:
         guardian_threshold: int = 0,
         owner_address: str | Address | None = None,
         legacy_datum: bytes | None = None,
-        deposit: int = MIN_RECORD_LOVELACE,
+        deposit: int | None = None,
         valid_for: int = DEFAULT_VALID_FOR_S,
     ) -> BuiltTx:
         """Move a legacy record to the identity registry (Part 2 §3.4 ``Adopt``).
@@ -500,7 +525,7 @@ class IdentityRegistry:
         plan.spend(legacy, ctx.script_source("legacy"), LEGACY_DEREGISTER, None if legacy_datum is None else RawCBOR(raw))
         plan.mint(ctx.script_source("legacy"), {vid: -1}, LEGACY_BURN)
         plan.mint(ctx.script_source("identity"), {vid: 1}, Adopt(proof))
-        self._record_output(plan, vid, record, deposit, live_floor=True)
+        self._record_output(plan, vid, record, deposit, live_floor=True, explicit=deposit is not None)
         owner = (
             ctx.address_of(owner_address)
             if owner_address is not None
@@ -577,7 +602,10 @@ class IdentityRegistry:
         plan.require(blake2b_224(old.controller))
         self._update_signers(plan, old, new, window)
         lovelace = rec.lovelace if deposit is None else deposit
-        return self._finish_spend(funding_address, plan, rec, IdentitySpend("Update"), new, lovelace, live_floor=True)
+        return self._finish_spend(
+            funding_address, plan, rec, IdentitySpend("Update"), new, lovelace,
+            live_floor=True, explicit=deposit is not None,
+        )
 
     def _update_signers(self, plan: TxPlan, old: IdentityDatum, new: IdentityDatum, window: Window) -> None:
         """The signatures of the Update rules (Part 2 §3.6)."""
@@ -645,7 +673,8 @@ class IdentityRegistry:
         plan.require(blake2b_224(old.controller), blake2b_224(controller))
         lovelace = rec.lovelace if deposit is None else deposit
         return self._finish_spend(
-            funding_address, plan, rec, IdentitySpend("ChangeController"), new, lovelace, live_floor=True
+            funding_address, plan, rec, IdentitySpend("ChangeController"), new, lovelace,
+            live_floor=True, explicit=deposit is not None,
         )
 
     def end_subagents(
@@ -757,6 +786,8 @@ class IdentityRegistry:
             raise IdentityRuleError(f"reason {reason} is not allowed in Revoke")
         if invalid_from is None and reason == REASON_KEY_COMPROMISE:
             raise IdentityRuleError("reason 1 (keyCompromise) needs invalid_from")
+        # The pinned blueprint (b5d66a6) requires [created_at, lo]. The contract fix W4-CFIX widens
+        # it to [created_at - 1 h, lo]; keep the narrower range until the blueprint is updated.
         if invalid_from is not None and not rec.datum.created_at <= invalid_from <= window.lo:
             raise IdentityRuleError(f"invalid_from must be in [{rec.datum.created_at}, {window.lo}]")
         actor, author = self._actor(plan, rec.datum, by_party, RIGHT_REVOKE, window)
