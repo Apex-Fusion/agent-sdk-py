@@ -44,6 +44,7 @@ __all__ = [
     "ScriptInfo",
     "blueprint_bytes",
     "enterprise_address",
+    "reward_address",
     "unapplied_code",
 ]
 
@@ -96,6 +97,11 @@ def unapplied_code(title: str, *, blueprint: str = IDENTITY_BLUEPRINT) -> bytes:
 def enterprise_address(script_hash: bytes) -> Address:
     """The enterprise address of a script: the script as payment credential, no stake."""
     return Address(payment_part=ScriptHash(script_hash), network=Network.MAINNET)
+
+
+def reward_address(script_hash: bytes) -> Address:
+    """The reward address of a script stake credential (CIP-19 header ``0xf0 | network ID``)."""
+    return Address(staking_part=ScriptHash(script_hash), network=Network.MAINNET)
 
 
 @dataclass(frozen=True)

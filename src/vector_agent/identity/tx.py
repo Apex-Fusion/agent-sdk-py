@@ -25,7 +25,6 @@ from pycardano import (
     Asset,
     AssetName,
     MultiAsset,
-    Network,
     Redeemer,
     ScriptHash,
     Transaction,
@@ -45,6 +44,7 @@ from vector_agent.identity.chain import Ledger, SlotClock
 from vector_agent.identity.constants import MAX_RANGE_MS
 from vector_agent.identity.context import ScriptSource, utxo_ref
 from vector_agent.identity.plutus_data import PlutusData, encode_data
+from vector_agent.identity.scripts import reward_address
 
 #: A redeemer: a value with ``to_data()``, Plutus Data, or CBOR bytes.
 RedeemerValue = Any
@@ -255,8 +255,7 @@ def build(
     if plan.withdrawals:
         rewards = {}
         for source, redeemer, amount in plan.withdrawals:
-            reward = Address(staking_part=ScriptHash(bytes(source.script_hash)), network=Network.MAINNET)
-            rewards[reward.to_primitive()] = amount
+            rewards[reward_address(bytes(source.script_hash)).to_primitive()] = amount
             builder.add_withdrawal_script(source.argument, Redeemer(RawCBOR(redeemer)))
         builder.withdrawals = Withdrawals(rewards)
     for utxo in plan.reference_inputs:

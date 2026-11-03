@@ -1,6 +1,6 @@
 """Ledger reads for the identity builders.
 
-The builders need four reads besides the PyCardano ``ChainContext`` that
+The builders need five reads besides the PyCardano ``ChainContext`` that
 balances a transaction:
 
 - the current output of a reference (Ogmios ``queryLedgerState/utxo`` by
@@ -9,7 +9,10 @@ balances a transaction:
 - the current outputs that hold a token (Koios ``asset_utxos``, then Ogmios
   for the outputs themselves, so that an output that Koios has not yet seen
   spent is not used);
-- the tip slot.
+- the tip slot;
+- the reward balance of a script stake credential (Ogmios
+  ``rewardAccountSummaries``, else Koios ``account_info``: Ogmios gives no
+  summary for a registered credential without delegation).
 
 :class:`Ledger` is the interface; :class:`OgmiosKoiosLedger` reads Vector
 mainnet through the public Ogmios (HTTP JSON-RPC, Ogmios v6) and Koios (v1)
@@ -44,6 +47,7 @@ from pycardano.serialization import RawCBOR
 
 from vector_agent.exceptions import ConnectionError as VectorConnectionError
 from vector_agent.identity.constants import MAINNET_SLOT_LENGTH_MS, MAINNET_SYSTEM_START_MS
+from vector_agent.identity.scripts import reward_address
 from vector_agent.identity.types import OutputReference
 
 __all__ = [
@@ -242,10 +246,35 @@ class OgmiosKoiosLedger:
         return [u for u in self.utxos_by_refs(refs) if holds_token(u, policy_id, asset_name)]
 
     def reward_balance(self, script_hash: bytes) -> int | None:
+        """Ogmios ``rewardAccountSummaries``, else Koios ``account_info``.
+
+        Ogmios gives no summary for a registered credential that is not delegated
+        (Module-1 can never be delegated), so Koios then tells whether the reward
+        address is registered. The balance is never taken as 0 without that check:
+        anybody can pay into a reward account.
+        """
         result = self._ogmios("queryLedgerState/rewardAccountSummaries", {"scripts": [script_hash.hex()]})
         # Ogmios v6 answers a list of {from, credential, rewards: {ada: {lovelace}}, ...}.
         entries = result if isinstance(result, list) else list((result or {}).values())
         for entry in entries:
             if entry.get("credential", script_hash.hex()) == script_hash.hex():
                 return int(entry["rewards"]["ada"]["lovelace"])
-        return None
+        return self._koios_reward_balance(str(reward_address(script_hash)))
+
+    def _koios_reward_balance(self, address: str) -> int | None:
+        """Koios ``account_info`` of one reward address: ``rewards_available`` when it is registered, else None."""
+        try:
+            response = httpx.post(
+                f"{self._koios_url}/account_info",
+                json={"_stake_addresses": [address]},
+                headers=self._koios_headers,
+                timeout=self._timeout,
+            )
+            response.raise_for_status()
+            rows = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise VectorConnectionError(f"Koios account_info failed: {exc}") from exc
+        account = next((row for row in rows if row.get("stake_address") == address), None)
+        if account is None or account.get("status") != "registered":
+            return None
+        return int(account["rewards_available"])

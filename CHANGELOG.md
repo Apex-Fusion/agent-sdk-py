@@ -20,6 +20,7 @@ This release also contains the unreleased 0.1.11 changes.
 - `Vaults`: open, pay (new escrows from a vault) and close.
 - `IdentityGateway`: DID resolution and the current record through the gateway's HTTPS binding.
 - Builders return an unsigned transaction and every key hash that must sign it. The SDK never signs; `add_signatures` adds the caller's witnesses.
+- A Module-1 consent withdraws the whole reward balance of Module-1. The ledger reads it from Ogmios. Ogmios gives no summary for a registered stake credential without delegation, and Module-1 has no delegation: the balance then comes from Koios `account_info`.
 - Codecs for every on-chain type, byte-compatible with Aiken `cbor.serialise`.
 - The unapplied scripts of the identity-marketplace blueprint (agents-marketplace `1643583`) and the deployed legacy registry script are embedded. The deployment values come from configuration (`VECTOR_IDENTITY_*`).
 

@@ -139,25 +139,66 @@ def test_vault_tops_up_the_buyer_bond(world: World, payer: Address, agent: Agent
     assert output.amount == min_lovelace(world.ctx, TransactionOutput(output.address, output.amount, datum=output.datum))
 
 
-def test_ogmios_reward_balance(monkeypatch: pytest.MonkeyPatch) -> None:
-    script = bytes([0xAB]) * 28
+#: A script stake credential and the reward address that Koios lists for it (CIP-19 header 0xf1: script, network 1).
+REWARD_SCRIPT = bytes.fromhex("a38f97f3d0228eae7df6785986d377e34034d43c2aa46aa9609aef89")
+REWARD_ADDRESS = "stake17x3cl9ln6q3gatna7eu9npknwl35qdx58s42g64fvzdwlzg3fnwlc"
+
+
+def reward_ledger(
+    monkeypatch: pytest.MonkeyPatch, summaries: list[dict], accounts: list[dict] | None = None
+) -> tuple[OgmiosKoiosLedger, list[httpx.Request]]:
+    """A ledger whose Ogmios answers ``summaries`` and whose Koios answers ``accounts``; it keeps the requests."""
+    requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.host == "k.example.org":
+            return httpx.Response(200, json=accounts)
         body = json.loads(request.content)
         assert body["method"] == "queryLedgerState/rewardAccountSummaries"
-        assert body["params"] == {"scripts": [script.hex()]}
-        entries = [{"from": "script", "credential": script.hex(), "rewards": {"ada": {"lovelace": 42}}}]
-        return httpx.Response(200, json={"jsonrpc": "2.0", "result": entries if body["id"] else []})
+        assert body["params"] == {"scripts": [REWARD_SCRIPT.hex()]}
+        return httpx.Response(200, json={"jsonrpc": "2.0", "result": summaries})
 
-    transport = httpx.MockTransport(handler)
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr("vector_agent.identity.chain.httpx.post", client.post)
+    ledger = OgmiosKoiosLedger(
+        ogmios_url="https://ogmios.example.org",
+        koios_url="https://k.example.org",
+        koios_token="t0ken",
+        context=object(),
+    )
+    return ledger, requests
 
-    def post(url, **kwargs):
-        kwargs["json"] = {**kwargs["json"], "id": post.registered}
-        return httpx.Client(transport=transport).post(url, **kwargs)
 
-    monkeypatch.setattr("vector_agent.identity.chain.httpx.post", post)
-    ledger = OgmiosKoiosLedger(ogmios_url="https://ogmios.example.org", koios_url="https://k.example.org", context=object())
-    post.registered = 1
-    assert ledger.reward_balance(script) == 42
-    post.registered = 0
-    assert ledger.reward_balance(script) is None
+def test_reward_balance_from_the_ogmios_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    summary = {"from": "script", "credential": REWARD_SCRIPT.hex(), "rewards": {"ada": {"lovelace": 42}}}
+    ledger, requests = reward_ledger(monkeypatch, [summary])
+    assert ledger.reward_balance(REWARD_SCRIPT) == 42
+    assert [r.url.host for r in requests] == ["ogmios.example.org"]
+
+
+def test_reward_balance_from_koios_without_an_ogmios_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Ogmios gives no summary for a registered credential that is not delegated.
+    account = {
+        "stake_address": REWARD_ADDRESS,
+        "status": "registered",
+        "delegated_pool": None,
+        "rewards_available": "1500000",
+    }
+    ledger, requests = reward_ledger(monkeypatch, [], [account])
+    assert ledger.reward_balance(REWARD_SCRIPT) == 1_500_000
+    koios = requests[1]
+    assert str(koios.url) == "https://k.example.org/api/v1/account_info"
+    assert json.loads(koios.content) == {"_stake_addresses": [REWARD_ADDRESS]}
+    assert koios.headers["Authorization"] == "Bearer t0ken"
+
+
+@pytest.mark.parametrize(
+    "accounts",
+    [[{"stake_address": REWARD_ADDRESS, "status": "not registered", "rewards_available": "7"}], []],
+    ids=["not-registered", "unknown"],
+)
+def test_reward_balance_is_none_without_a_registration(monkeypatch: pytest.MonkeyPatch, accounts: list[dict]) -> None:
+    ledger, requests = reward_ledger(monkeypatch, [], accounts)
+    assert ledger.reward_balance(REWARD_SCRIPT) is None
+    assert [r.url.host for r in requests] == ["ogmios.example.org", "k.example.org"]
