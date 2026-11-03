@@ -83,4 +83,3 @@ class OgmiosClient:
 
     async def close(self):
         """No-op — clients are created per-request."""
-        pass

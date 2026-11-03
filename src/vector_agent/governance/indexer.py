@@ -3,17 +3,31 @@
 Queries proposal, critique, and endorsement UTxOs from the chain,
 decodes inline datums, and provides filtered/sorted views.
 
-Phase 1.0: All queries are live UTxO scans via Ogmios.
-No separate database required.
+All queries are live UTxO scans via Ogmios; no separate database is needed.
+
+The decoders read the layouts of both Module-6 deployments, so old positions
+stay readable until their owners exit:
+
+- On the deployment that reads identity records, an agent identifier is the
+  32-byte identifier of a record (``proposer`` and the other agent fields give
+  ``did:vector:<id>``), and a critique or an endorsement names its proposal by
+  the seed. ``proposal_token`` links them: a proposal holds the token
+  ``proposal_token_name(seed)``, and each critique and endorsement gives the
+  token of the seed that it names.
+- On the old deployment an agent identifier is text, and a critique or an
+  endorsement names the proposal output (``proposal_ref``).
 """
 
-import cbor2
-from typing import Optional
 
+import cbor2
 from pycardano import Address, Network
 from pycardano.hash import ScriptHash
 from pycardano.plutus import RawPlutusData
+from pycardano.serialization import RawCBOR
 
+from vector_agent.governance.types import agent_id, proposal_token_name
+from vector_agent.identity.ids import vector_did
+from vector_agent.identity.types import OutputReference
 
 # CBOR constructor tag offsets for Plutus sum types
 _PROPOSAL_STATE_NAMES = {
@@ -45,13 +59,15 @@ _CRITIQUE_TYPE_NAMES = {
 }
 
 
-def _decode_datum(raw_datum) -> Optional[dict]:
+def _decode_datum(raw_datum) -> dict | None:
     """Decode a PyCardano inline datum into a Python dict via CBOR."""
     if raw_datum is None:
         return None
     try:
         if isinstance(raw_datum, RawPlutusData):
             data = raw_datum.data
+        elif isinstance(raw_datum, RawCBOR):
+            data = cbor2.loads(raw_datum.cbor)
         elif isinstance(raw_datum, bytes):
             data = cbor2.loads(raw_datum)
         else:
@@ -63,7 +79,58 @@ def _decode_datum(raw_datum) -> Optional[dict]:
         return None
 
 
-def _decode_proposal(datum_dict: dict) -> Optional[dict]:
+def _agent_text(value) -> str:
+    """``did:vector:<id>`` for a 32-byte identifier, else the text of an old
+    deployment, else hex."""
+    if isinstance(value, bytes) and len(value) == 32:
+        return vector_did(value.hex())
+    if isinstance(value, bytes):
+        try:
+            return value.decode("utf-8")
+        except UnicodeDecodeError:
+            return value.hex()
+    return str(value)
+
+
+def _seed_token(proposal_ref: dict | None) -> str | None:
+    """The proposal token of the seed that a critique or an endorsement names."""
+    if not proposal_ref:
+        return None
+    try:
+        seed = OutputReference(bytes.fromhex(proposal_ref["tx_hash"]), int(proposal_ref["output_index"]))
+        return proposal_token_name(seed).hex()
+    except (ValueError, TypeError):
+        return None
+
+
+def _agent_keys(value: str | bytes) -> set[str]:
+    """The forms that a proposer filter matches: the value itself (the hex of a
+    decoded ``proposer_did``), the UTF-8 bytes of text (old deployment) and the
+    identifier of a DID or of 64 hex characters."""
+    raw = value.encode("utf-8") if isinstance(value, str) else bytes(value)
+    keys = {raw.hex()}
+    if isinstance(value, str):
+        keys.add(value)
+    try:
+        keys.add(agent_id(value).hex())
+    except (TypeError, ValueError):
+        pass
+    return keys
+
+
+def _linked(positions: list[dict], proposal: dict) -> list[dict]:
+    """The critiques or endorsements of ``proposal``: by the proposal token (new
+    deployment: they name the seed) or by the proposal output (old deployment)."""
+    token = proposal.get("proposal_token")
+    ref = proposal.get("utxo_ref")
+    return [
+        p
+        for p in positions
+        if (token is not None and p.get("proposal_token") == token) or (ref is not None and p.get("proposal_ref") == ref)
+    ]
+
+
+def _decode_proposal(datum_dict: dict) -> dict | None:
     """Parse a ProposalDatum from a decoded CBOR constructor."""
     if datum_dict is None:
         return None
@@ -88,6 +155,7 @@ def _decode_proposal(datum_dict: dict) -> Optional[dict]:
 
         return {
             "proposer_did": fields[0].hex() if isinstance(fields[0], bytes) else str(fields[0]),
+            "proposer": _agent_text(fields[0]),
             "proposal_hash": fields[2].hex() if isinstance(fields[2], bytes) else str(fields[2]),
             "proposal_type": type_name,
             "storage_uri": fields[4].decode("utf-8") if isinstance(fields[4], bytes) else str(fields[4]),
@@ -103,7 +171,7 @@ def _decode_proposal(datum_dict: dict) -> Optional[dict]:
         return None
 
 
-def _decode_critique(datum_dict: dict) -> Optional[dict]:
+def _decode_critique(datum_dict: dict) -> dict | None:
     """Parse a CritiqueDatum from a decoded CBOR constructor."""
     if datum_dict is None:
         return None
@@ -133,7 +201,9 @@ def _decode_critique(datum_dict: dict) -> Optional[dict]:
 
         return {
             "critic_did": fields[0].hex() if isinstance(fields[0], bytes) else str(fields[0]),
+            "critic": _agent_text(fields[0]),
             "proposal_ref": proposal_ref,
+            "proposal_token": _seed_token(proposal_ref),
             "critique_hash": fields[3].hex() if isinstance(fields[3], bytes) else str(fields[3]),
             "storage_uri": fields[4].decode("utf-8") if isinstance(fields[4], bytes) else str(fields[4]),
             "critique_type": type_name,
@@ -145,7 +215,7 @@ def _decode_critique(datum_dict: dict) -> Optional[dict]:
         return None
 
 
-def _decode_endorsement(datum_dict: dict) -> Optional[dict]:
+def _decode_endorsement(datum_dict: dict) -> dict | None:
     """Parse a GovernanceEndorsementDatum from a decoded CBOR constructor."""
     if datum_dict is None:
         return None
@@ -164,7 +234,9 @@ def _decode_endorsement(datum_dict: dict) -> Optional[dict]:
 
         return {
             "endorser_did": fields[0].hex() if isinstance(fields[0], bytes) else str(fields[0]),
+            "endorser": _agent_text(fields[0]),
             "proposal_ref": proposal_ref,
+            "proposal_token": _seed_token(proposal_ref),
             "stake_amount": fields[3],
             "created_at": fields[4],
         }
@@ -190,6 +262,10 @@ class GovernanceIndexer:
         Script hash of the endorsement_spend validator.
     treasury_address : str
         Address of the treasury holder script.
+
+    :meth:`for_deployment` gives the addresses of a
+    :class:`~vector_agent.governance.GovernanceDeployment`. The hash arguments
+    can name another deployment, for example the old one, to read its positions.
     """
 
     def __init__(
@@ -206,6 +282,19 @@ class GovernanceIndexer:
         self._endorsement_addr = self._script_address(endorsement_spend_hash) if endorsement_spend_hash else ""
         self._treasury_addr = treasury_address
 
+    @classmethod
+    def for_deployment(cls, context, deployment) -> "GovernanceIndexer":
+        """An indexer of the validators and the treasury of ``deployment``."""
+        scripts = deployment.scripts()
+        treasury = cls._script_address(scripts.config.governance_treasury_hash.hex())
+        return cls(
+            context,
+            scripts.proposal_spend.hash_hex,
+            scripts.critique_spend.hash_hex,
+            scripts.endorsement_spend.hash_hex,
+            treasury,
+        )
+
     @staticmethod
     def _script_address(script_hash_hex: str) -> str:
         sh = ScriptHash.from_primitive(bytes.fromhex(script_hash_hex))
@@ -213,16 +302,18 @@ class GovernanceIndexer:
 
     async def get_proposals(
         self,
-        state: Optional[str] = None,
-        proposal_type: Optional[str] = None,
-        proposer_did: Optional[str] = None,
+        state: str | None = None,
+        proposal_type: str | None = None,
+        proposer_did: str | None = None,
         sort_by: str = "submitted_at",
         descending: bool = True,
     ) -> list[dict]:
         """Query proposals, optionally filtered by state/type/proposer.
 
         Returns a list of dicts with decoded proposal fields plus
-        ``utxo_ref`` (tx_hash, output_index) and ``lovelace``.
+        ``utxo_ref`` (tx_hash, output_index), ``lovelace`` and
+        ``proposal_token`` (hex, None for a lock). ``proposer_did`` may be a
+        ``did:vector`` DID, 64 hex characters or the text of an old position.
         """
         if not self._proposal_addr:
             return []
@@ -241,7 +332,7 @@ class GovernanceIndexer:
                 continue
             if proposal_type and proposal["proposal_type"] != proposal_type:
                 continue
-            if proposer_did and proposal["proposer_did"] != proposer_did:
+            if proposer_did and proposal["proposer_did"] not in _agent_keys(proposer_did):
                 continue
 
             proposal["utxo_ref"] = {
@@ -258,14 +349,15 @@ class GovernanceIndexer:
 
             # Check for proposal token (prop_*) — UTxOs without tokens
             # are orphaned lock-only datums that can't be spent
-            has_token = False
+            token = None
             if hasattr(u.output.amount, "multi_asset") and u.output.amount.multi_asset:
                 for _pid, assets in u.output.amount.multi_asset.items():
                     for aname in assets:
                         if aname.payload[:5] == b"prop_":
-                            has_token = True
+                            token = aname.payload.hex()
                             break
-            proposal["has_proposal_token"] = has_token
+            proposal["has_proposal_token"] = token is not None
+            proposal["proposal_token"] = token
 
             proposals.append(proposal)
 
@@ -277,10 +369,14 @@ class GovernanceIndexer:
 
     async def get_critiques(
         self,
-        proposal_tx_hash: Optional[str] = None,
-        proposal_output_index: Optional[int] = None,
+        proposal_tx_hash: str | None = None,
+        proposal_output_index: int | None = None,
+        *,
+        proposal_token: str | None = None,
     ) -> list[dict]:
-        """Query critiques, optionally filtered by the proposal they reference."""
+        """Query critiques, optionally filtered by the proposal they reference:
+        by ``proposal_ref`` (the seed on the new deployment, the proposal output on
+        the old one) or by ``proposal_token`` (hex)."""
         if not self._critique_addr:
             return []
 
@@ -300,6 +396,8 @@ class GovernanceIndexer:
                     continue
                 if proposal_output_index is not None and ref["output_index"] != proposal_output_index:
                     continue
+            if proposal_token and critique.get("proposal_token") != proposal_token:
+                continue
 
             critique["utxo_ref"] = {
                 "tx_hash": str(u.input.transaction_id),
@@ -311,10 +409,13 @@ class GovernanceIndexer:
 
     async def get_endorsements(
         self,
-        proposal_tx_hash: Optional[str] = None,
-        proposal_output_index: Optional[int] = None,
+        proposal_tx_hash: str | None = None,
+        proposal_output_index: int | None = None,
+        *,
+        proposal_token: str | None = None,
     ) -> list[dict]:
-        """Query endorsements, optionally filtered by the proposal they reference."""
+        """Query endorsements, optionally filtered by the proposal they reference
+        (``proposal_ref`` or ``proposal_token``, as in :meth:`get_critiques`)."""
         if not self._endorsement_addr:
             return []
 
@@ -333,6 +434,8 @@ class GovernanceIndexer:
                     continue
                 if proposal_output_index is not None and ref["output_index"] != proposal_output_index:
                     continue
+            if proposal_token and endorsement.get("proposal_token") != proposal_token:
+                continue
 
             endorsement["utxo_ref"] = {
                 "tx_hash": str(u.input.transaction_id),
@@ -492,26 +595,24 @@ class GovernanceIndexer:
                        + adoption_track_record × 0.1
 
         Args:
-            proposal: Decoded proposal dict (must have utxo_ref).
+            proposal: Decoded proposal dict (from :meth:`get_proposals`).
             proposer_reputation_lovelace: Proposer's Game 3 self-stake (0 if unknown).
 
         Returns:
             Quality signal float in [0.0, 1.0].
         """
-        ref = proposal.get("utxo_ref", {})
-        tx_hash = ref.get("tx_hash", "")
-        idx = ref.get("output_index", 0)
+        # Critiques and endorsements of this proposal (by token or by output)
+        endorsements = _linked(await self.get_endorsements(), proposal)
+        critiques = _linked(await self.get_critiques(), proposal)
 
         # Component 1: Normalized reputation (Game 3 stake)
         norm_rep = min(1.0, proposer_reputation_lovelace / self.ELITE_REPUTATION_THRESHOLD)
 
         # Component 2: Normalized endorsement stake
-        endorsements = await self.get_endorsements(tx_hash, idx)
         total_endorsement = sum(e.get("stake_amount", 0) for e in endorsements)
         norm_endorsement = min(1.0, total_endorsement / (self.MIN_PROPOSAL_STAKE * 10))
 
         # Component 3: Controversy discount (fewer opposing critiques = higher)
-        critiques = await self.get_critiques(tx_hash, idx)
         opposing_count = sum(1 for c in critiques if c.get("critique_type") == "Opposing")
         controversy = 1.0 / (1 + opposing_count)
 

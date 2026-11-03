@@ -1,0 +1,534 @@
+{
+  "name": "adopted",
+  "description": "A legacy record (versions 0 and 1) adopted after the cutoff slot (version 2). Resolved in the canonical and the legacy form, and at times before the cutoff slot and before the adoption.",
+  "specification": "docs/did-vector-method.md",
+  "comparison": "Resolve each request against the ledger (as of its tip) and the settings. The JCS (RFC 8785) serialisation of the result must equal that of `result`, except the error `title` (Part 1 Section 8.2).",
+  "settings": {
+    "network": {
+      "networkMagic": 764824073,
+      "systemStart": 1756485600,
+      "slotLength": 1,
+      "securityParam": 2160
+    },
+    "registries": {
+      "identity": {
+        "policyId": "bb4727fb54a4b177b86e75c9a5ff7ed8d71920e8841be969f37a8b00",
+        "address": "addr1wxa5wflm2jjtzaacde6unf0l0mvdwxfqazzph6tf7dagkqqm2r037"
+      },
+      "legacy": {
+        "policyId": "be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01",
+        "address": "addr1wxlp5z3fztdpsp6ha57dvx6khw82kqvgcxwu8s8rjykjcqghprf42"
+      },
+      "cutoffSlot": 5000
+    }
+  },
+  "ledger": {
+    "tip": {
+      "blockHeight": 1000,
+      "blockHash": "a8f621c8c6da8ec22be95f0ad5f67e672f199764bd40bbbc5d90dbe14d088fd3",
+      "slot": 10000
+    },
+    "transactions": [
+      {
+        "txHash": "56f73ce7225c86bb063e074a5b1a874454b953615c30bdb435b9f06537949bcc",
+        "blockHash": "56afe9ae2ba5e60144b2934735ff8647ac243702bcc46122e1329f63dadebe30",
+        "blockHeight": 200,
+        "txIndex": 0,
+        "slot": 2000,
+        "inputs": [
+          {
+            "txHash": "34abf56faf54c186fb3c50ae4a0646c7e6fc3be97f6d9948bf467b23d0507619",
+            "outputIndex": 0,
+            "address": "addr1q8pyltzvw2vvp29g95ndr6tukpzyc7qtaxq8f400c2kuq83t63ar50qelzpf59teke4kuythtxzgx6mxtv75l79xryvqhagm80",
+            "assets": []
+          }
+        ],
+        "outputs": [
+          {
+            "outputIndex": 0,
+            "address": "addr1wxlp5z3fztdpsp6ha57dvx6khw82kqvgcxwu8s8rjykjcqghprf42",
+            "lovelace": "2000000",
+            "assets": [
+              {
+                "policyId": "be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01",
+                "assetName": "04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+                "quantity": "1"
+              }
+            ],
+            "inlineDatum": "d8799fd8799f581ca7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6deff4c4c6567616379204167656e74582041207265636f7264206f6620746865206c65676163792072656769737472792e9f53646f63756d656e742d65787472616374696f6eff46637573746f6d582068747470733a2f2f6c65676163792e6578616d706c652e6f72672f6167656e741b00000198d9c19800ff",
+            "datumHash": "07329f101f53e3eb00d0c311574d2d79e7046a9c946173e3747ad732d77790e8",
+            "hasReferenceScript": false
+          },
+          {
+            "outputIndex": 1,
+            "address": "addr1q8pyltzvw2vvp29g95ndr6tukpzyc7qtaxq8f400c2kuq83t63ar50qelzpf59teke4kuythtxzgx6mxtv75l79xryvqhagm80",
+            "lovelace": "5000000",
+            "assets": [],
+            "inlineDatum": null,
+            "datumHash": null,
+            "hasReferenceScript": false
+          }
+        ],
+        "mint": [
+          {
+            "policyId": "be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01",
+            "assetName": "04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+            "quantity": "1"
+          }
+        ],
+        "vkeyWitnesses": [
+          "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca"
+        ]
+      },
+      {
+        "txHash": "a1979ac06076b6412c21f7882e00bcf0baf3f790ea4db800ac36b70aeeb5289e",
+        "blockHash": "cdd45b7129580f83e44ba102b15c52048fc01672d3fa2a16101a447eb4448e51",
+        "blockHeight": 300,
+        "txIndex": 0,
+        "slot": 3000,
+        "inputs": [
+          {
+            "txHash": "56f73ce7225c86bb063e074a5b1a874454b953615c30bdb435b9f06537949bcc",
+            "outputIndex": 0,
+            "address": "addr1wxlp5z3fztdpsp6ha57dvx6khw82kqvgcxwu8s8rjykjcqghprf42",
+            "assets": [
+              {
+                "policyId": "be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01",
+                "assetName": "04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+                "quantity": "1"
+              }
+            ]
+          },
+          {
+            "txHash": "37e484e2d5df226bc6784a88729e904d7a8116727509556d1d03b0116ae677a2",
+            "outputIndex": 0,
+            "address": "addr1q8pyltzvw2vvp29g95ndr6tukpzyc7qtaxq8f400c2kuq83t63ar50qelzpf59teke4kuythtxzgx6mxtv75l79xryvqhagm80",
+            "assets": []
+          }
+        ],
+        "outputs": [
+          {
+            "outputIndex": 0,
+            "address": "addr1wxlp5z3fztdpsp6ha57dvx6khw82kqvgcxwu8s8rjykjcqghprf42",
+            "lovelace": "2000000",
+            "assets": [
+              {
+                "policyId": "be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01",
+                "assetName": "04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+                "quantity": "1"
+              }
+            ],
+            "inlineDatum": "d8799fd8799f581ca7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6deff4f4c6567616379204167656e74207632582041207265636f7264206f6620746865206c65676163792072656769737472792e9f53646f63756d656e742d65787472616374696f6eff46637573746f6d582068747470733a2f2f6c65676163792e6578616d706c652e6f72672f6167656e741b00000198d9c19800ff",
+            "datumHash": "8193565989d31d677a9e4cd07e8fd5746fe304d6cd8e22005f8dd09d62897efc",
+            "hasReferenceScript": false
+          },
+          {
+            "outputIndex": 1,
+            "address": "addr1q8pyltzvw2vvp29g95ndr6tukpzyc7qtaxq8f400c2kuq83t63ar50qelzpf59teke4kuythtxzgx6mxtv75l79xryvqhagm80",
+            "lovelace": "5000000",
+            "assets": [],
+            "inlineDatum": null,
+            "datumHash": null,
+            "hasReferenceScript": false
+          }
+        ],
+        "mint": [],
+        "vkeyWitnesses": [
+          "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca"
+        ]
+      },
+      {
+        "txHash": "500ad5cf9c25e8f2d3a5212a24fe796da4d5610c9faa49721be50de88a60e937",
+        "blockHash": "e321bf621ad1a948083c5328ebf28f7a9ff53dfbd5b0e0e45429fac63e8e19e8",
+        "blockHeight": 600,
+        "txIndex": 0,
+        "slot": 6000,
+        "inputs": [
+          {
+            "txHash": "a1979ac06076b6412c21f7882e00bcf0baf3f790ea4db800ac36b70aeeb5289e",
+            "outputIndex": 0,
+            "address": "addr1wxlp5z3fztdpsp6ha57dvx6khw82kqvgcxwu8s8rjykjcqghprf42",
+            "assets": [
+              {
+                "policyId": "be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01",
+                "assetName": "04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+                "quantity": "1"
+              }
+            ]
+          },
+          {
+            "txHash": "792259a1165eba68bcd556235f43def81ee61e4d0d810babd2fd7c8274e53f86",
+            "outputIndex": 0,
+            "address": "addr1q8pyltzvw2vvp29g95ndr6tukpzyc7qtaxq8f400c2kuq83t63ar50qelzpf59teke4kuythtxzgx6mxtv75l79xryvqhagm80",
+            "assets": []
+          }
+        ],
+        "outputs": [
+          {
+            "outputIndex": 0,
+            "address": "addr1wxa5wflm2jjtzaacde6unf0l0mvdwxfqazzph6tf7dagkqqm2r037",
+            "lovelace": "10000000",
+            "assets": [
+              {
+                "policyId": "bb4727fb54a4b177b86e75c9a5ff7ed8d71920e8841be969f37a8b00",
+                "assetName": "04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+                "quantity": "1"
+              }
+            ],
+            "inlineDatum": "d8799f58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c9fd8799fd879805820ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d10bd87a80ffff9fd8799fd87980d8799f581cfd5939fb5601e5b41eee666dba14c0a7d151d4cd9b0e16691ce3a9a4ffd87a8000d87a8003d87a80ffff00d87a80d87980004a746573742d6167656e74581c416e206167656e7420666f72207265736f6c7665722074657374732e55766563746f722d6167656e742d74656d706c617465581d68747470733a2f2f6167656e742e6578616d706c652e6f72672f6132619f4e6f63722e657874726163742e7631546c6c6d2e746578742e67656e65726174652e7631ff1b00000198f70ed080d87980ff",
+            "datumHash": "c5fea728b3319d1ba8463830ec109a3dfbec10dc41767ad453d7fb3a015931c3",
+            "hasReferenceScript": false
+          },
+          {
+            "outputIndex": 1,
+            "address": "addr1q8pyltzvw2vvp29g95ndr6tukpzyc7qtaxq8f400c2kuq83t63ar50qelzpf59teke4kuythtxzgx6mxtv75l79xryvqhagm80",
+            "lovelace": "5000000",
+            "assets": [],
+            "inlineDatum": null,
+            "datumHash": null,
+            "hasReferenceScript": false
+          }
+        ],
+        "mint": [
+          {
+            "policyId": "bb4727fb54a4b177b86e75c9a5ff7ed8d71920e8841be969f37a8b00",
+            "assetName": "04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+            "quantity": "1"
+          },
+          {
+            "policyId": "be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01",
+            "assetName": "04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+            "quantity": "-1"
+          }
+        ],
+        "vkeyWitnesses": [
+          "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca",
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        ]
+      }
+    ],
+    "datums": {}
+  },
+  "requests": [
+    {
+      "did": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+      "options": {},
+      "httpStatus": 200,
+      "result": {
+        "didDocument": {
+          "@context": "https://www.w3.org/ns/did/v1.1",
+          "assertionMethod": [
+            "#8a95c8ed588306ea88860b54eb0c65e77dfab999789cc5e6ca008799"
+          ],
+          "authentication": [
+            "#8a95c8ed588306ea88860b54eb0c65e77dfab999789cc5e6ca008799"
+          ],
+          "capabilityInvocation": [
+            "#0d6a577e9441ad8ed9663931906e4d43ece8f82c712b1d0235affb06"
+          ],
+          "id": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+          "verificationMethod": [
+            {
+              "controller": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+              "id": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1#0d6a577e9441ad8ed9663931906e4d43ece8f82c712b1d0235affb06",
+              "publicKeyMultibase": "z6Mkon3Necd6NkkyfoGoHxid2znGc59LU3K7mubaRcFbLfLX",
+              "type": "Multikey"
+            },
+            {
+              "controller": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+              "id": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1#8a95c8ed588306ea88860b54eb0c65e77dfab999789cc5e6ca008799",
+              "publicKeyMultibase": "z6MkvRXNYcE7MMduynWTgeKbDaT1iijDSC8pZqXZc8rHPrf2",
+              "type": "Multikey"
+            }
+          ]
+        },
+        "didDocumentMetadata": {
+          "canonicalId": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+          "created": "2025-08-29T17:13:20Z",
+          "equivalentId": [
+            "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1"
+          ],
+          "updated": "2025-08-29T18:20:00Z",
+          "vectorKeys": [
+            {
+              "id": "#8a95c8ed588306ea88860b54eb0c65e77dfab999789cc5e6ca008799",
+              "purposes": [
+                "authentication",
+                "assertion",
+                "transaction"
+              ],
+              "type": "Ed25519"
+            }
+          ],
+          "vectorLedger": {
+            "blockHash": "e321bf621ad1a948083c5328ebf28f7a9ff53dfbd5b0e0e45429fac63e8e19e8",
+            "blockHeight": 600,
+            "confirmations": 400,
+            "outputIndex": 0,
+            "slot": 6000,
+            "txId": "500ad5cf9c25e8f2d3a5212a24fe796da4d5610c9faa49721be50de88a60e937"
+          },
+          "vectorOrigin": "adopted",
+          "vectorParties": [
+            {
+              "notBefore": "1970-01-01T00:00:00Z",
+              "rights": [
+                "suspend",
+                "revoke"
+              ],
+              "role": "accountable",
+              "signer": "fd5939fb5601e5b41eee666dba14c0a7d151d4cd9b0e16691ce3a9a4"
+            }
+          ],
+          "vectorProfile": {
+            "capabilities": [
+              "ocr.extract.v1",
+              "llm.text.generate.v1"
+            ],
+            "createdAt": "2025-08-29T18:20:00Z",
+            "description": "An agent for resolver tests.",
+            "endpoint": "https://agent.example.org/a2a",
+            "framework": "vector-agent-template",
+            "name": "test-agent"
+          },
+          "vectorStatus": {
+            "effective": "active",
+            "status": "active"
+          },
+          "versionId": "2"
+        },
+        "didResolutionMetadata": {
+          "contentType": "application/did"
+        }
+      }
+    },
+    {
+      "did": "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+      "options": {},
+      "httpStatus": 200,
+      "result": {
+        "didDocument": {
+          "@context": "https://www.w3.org/ns/did/v1.1",
+          "assertionMethod": [
+            "#8a95c8ed588306ea88860b54eb0c65e77dfab999789cc5e6ca008799"
+          ],
+          "authentication": [
+            "#8a95c8ed588306ea88860b54eb0c65e77dfab999789cc5e6ca008799"
+          ],
+          "capabilityInvocation": [
+            "#0d6a577e9441ad8ed9663931906e4d43ece8f82c712b1d0235affb06"
+          ],
+          "id": "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+          "verificationMethod": [
+            {
+              "controller": "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+              "id": "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1#0d6a577e9441ad8ed9663931906e4d43ece8f82c712b1d0235affb06",
+              "publicKeyMultibase": "z6Mkon3Necd6NkkyfoGoHxid2znGc59LU3K7mubaRcFbLfLX",
+              "type": "Multikey"
+            },
+            {
+              "controller": "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+              "id": "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1#8a95c8ed588306ea88860b54eb0c65e77dfab999789cc5e6ca008799",
+              "publicKeyMultibase": "z6MkvRXNYcE7MMduynWTgeKbDaT1iijDSC8pZqXZc8rHPrf2",
+              "type": "Multikey"
+            }
+          ]
+        },
+        "didDocumentMetadata": {
+          "canonicalId": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+          "created": "2025-08-29T17:13:20Z",
+          "updated": "2025-08-29T18:20:00Z",
+          "vectorKeys": [
+            {
+              "id": "#8a95c8ed588306ea88860b54eb0c65e77dfab999789cc5e6ca008799",
+              "purposes": [
+                "authentication",
+                "assertion",
+                "transaction"
+              ],
+              "type": "Ed25519"
+            }
+          ],
+          "vectorLedger": {
+            "blockHash": "e321bf621ad1a948083c5328ebf28f7a9ff53dfbd5b0e0e45429fac63e8e19e8",
+            "blockHeight": 600,
+            "confirmations": 400,
+            "outputIndex": 0,
+            "slot": 6000,
+            "txId": "500ad5cf9c25e8f2d3a5212a24fe796da4d5610c9faa49721be50de88a60e937"
+          },
+          "vectorOrigin": "adopted",
+          "vectorParties": [
+            {
+              "notBefore": "1970-01-01T00:00:00Z",
+              "rights": [
+                "suspend",
+                "revoke"
+              ],
+              "role": "accountable",
+              "signer": "fd5939fb5601e5b41eee666dba14c0a7d151d4cd9b0e16691ce3a9a4"
+            }
+          ],
+          "vectorProfile": {
+            "capabilities": [
+              "ocr.extract.v1",
+              "llm.text.generate.v1"
+            ],
+            "createdAt": "2025-08-29T18:20:00Z",
+            "description": "An agent for resolver tests.",
+            "endpoint": "https://agent.example.org/a2a",
+            "framework": "vector-agent-template",
+            "name": "test-agent"
+          },
+          "vectorStatus": {
+            "effective": "active",
+            "status": "active"
+          },
+          "versionId": "2"
+        },
+        "didResolutionMetadata": {
+          "contentType": "application/did"
+        }
+      }
+    },
+    {
+      "did": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+      "options": {
+        "versionTime": "2025-08-29T17:46:40Z"
+      },
+      "httpStatus": 200,
+      "result": {
+        "didDocument": {
+          "@context": "https://www.w3.org/ns/did/v1.1",
+          "assertionMethod": [
+            "#a7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6de"
+          ],
+          "authentication": [
+            "#a7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6de"
+          ],
+          "capabilityInvocation": [
+            "#a7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6de"
+          ],
+          "id": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+          "verificationMethod": [
+            {
+              "controller": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+              "id": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1#a7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6de",
+              "publicKeyMultibase": "z6Mkfmm57fsb6VL7zVusP8zeA9SYkCKdvUhby2G7Yh8vvQ1P",
+              "type": "Multikey"
+            }
+          ]
+        },
+        "didDocumentMetadata": {
+          "canonicalId": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+          "created": "2025-08-29T17:13:20Z",
+          "equivalentId": [
+            "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1"
+          ],
+          "nextVersionId": "2",
+          "updated": "2025-08-29T17:30:00Z",
+          "vectorCurrent": {
+            "effective": "active"
+          },
+          "vectorLedger": {
+            "blockHash": "cdd45b7129580f83e44ba102b15c52048fc01672d3fa2a16101a447eb4448e51",
+            "blockHeight": 300,
+            "confirmations": 700,
+            "outputIndex": 0,
+            "slot": 3000,
+            "txId": "a1979ac06076b6412c21f7882e00bcf0baf3f790ea4db800ac36b70aeeb5289e"
+          },
+          "vectorOrigin": "adopted",
+          "vectorProfile": {
+            "capabilities": [
+              "document-extraction"
+            ],
+            "createdAt": "2025-08-29T17:13:20Z",
+            "description": "A record of the legacy registry.",
+            "endpoint": "https://legacy.example.org/agent",
+            "framework": "custom",
+            "name": "Legacy Agent v2"
+          },
+          "vectorStatus": {
+            "effective": "active",
+            "status": "active"
+          },
+          "versionId": "1"
+        },
+        "didResolutionMetadata": {
+          "contentType": "application/did"
+        }
+      }
+    },
+    {
+      "did": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+      "options": {
+        "versionTime": "2025-08-29T18:11:40Z"
+      },
+      "httpStatus": 200,
+      "result": {
+        "didDocument": {
+          "@context": "https://www.w3.org/ns/did/v1.1",
+          "assertionMethod": [
+            "#a7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6de"
+          ],
+          "authentication": [
+            "#a7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6de"
+          ],
+          "capabilityInvocation": [
+            "#a7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6de"
+          ],
+          "id": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+          "verificationMethod": [
+            {
+              "controller": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+              "id": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1#a7c847fe7a4d7cc59897e34146d4204dc72aa7bb3802228324d3b6de",
+              "publicKeyMultibase": "z6Mkfmm57fsb6VL7zVusP8zeA9SYkCKdvUhby2G7Yh8vvQ1P",
+              "type": "Multikey"
+            }
+          ]
+        },
+        "didDocumentMetadata": {
+          "canonicalId": "did:vector:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1",
+          "created": "2025-08-29T17:13:20Z",
+          "equivalentId": [
+            "did:vector:agent:be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01:04ee87eab3b01b3e7bf42307ce78810bf86ef5b59eb0b8a0dee254fd68d3e2c1"
+          ],
+          "nextVersionId": "2",
+          "updated": "2025-08-29T17:30:00Z",
+          "vectorCurrent": {
+            "effective": "active"
+          },
+          "vectorLedger": {
+            "blockHash": "cdd45b7129580f83e44ba102b15c52048fc01672d3fa2a16101a447eb4448e51",
+            "blockHeight": 300,
+            "confirmations": 700,
+            "outputIndex": 0,
+            "slot": 3000,
+            "txId": "a1979ac06076b6412c21f7882e00bcf0baf3f790ea4db800ac36b70aeeb5289e"
+          },
+          "vectorOrigin": "adopted",
+          "vectorProfile": {
+            "capabilities": [
+              "document-extraction"
+            ],
+            "createdAt": "2025-08-29T17:13:20Z",
+            "description": "A record of the legacy registry.",
+            "endpoint": "https://legacy.example.org/agent",
+            "framework": "custom",
+            "name": "Legacy Agent v2"
+          },
+          "vectorStatus": {
+            "effective": "suspended",
+            "effectiveReason": "unaccountable",
+            "status": "active"
+          },
+          "versionId": "1"
+        },
+        "didResolutionMetadata": {
+          "contentType": "application/did"
+        }
+      }
+    }
+  ]
+}

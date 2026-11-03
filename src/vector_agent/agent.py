@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 import httpx
 from pycardano import TransactionBuilder, TransactionOutput
 from pycardano.address import Address
 from pycardano.hash import ScriptHash
-from pycardano.plutus import PlutusV1Script, PlutusV2Script, PlutusV3Script, PlutusData, RawPlutusData, script_hash as compute_script_hash
+from pycardano.plutus import PlutusData, PlutusV1Script, PlutusV2Script, PlutusV3Script, RawPlutusData
+from pycardano.plutus import script_hash as compute_script_hash
 from pycardano.transaction import Asset, AssetName, MultiAsset, TransactionInput, Value
 
 from vector_agent.chain.context import VectorChainContext

@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime
 from fractions import Fraction
-from typing import Dict, List, Optional, Union
 
 import cbor2
 from pycardano.address import Address
@@ -75,7 +74,7 @@ def _bytes_field(obj) -> int:
     return int(obj)
 
 
-def _convert_cost_models(ogmios_models: dict) -> Dict[str, Dict[str, int]]:
+def _convert_cost_models(ogmios_models: dict) -> dict[str, dict[str, int]]:
     """Convert Ogmios cost model arrays into PyCardano's expected dict format.
 
     Ogmios keys: ``"plutus:v1"``, ``"plutus:v2"``, ``"plutus:v3"``
@@ -87,7 +86,7 @@ def _convert_cost_models(ogmios_models: dict) -> Dict[str, Dict[str, int]]:
         "plutus:v2": "PlutusV2",
         "plutus:v3": "PlutusV3",
     }
-    result: Dict[str, Dict[str, int]] = {}
+    result: dict[str, dict[str, int]] = {}
     for ogmios_key, pycardano_key in mapping.items():
         arr = ogmios_models.get(ogmios_key)
         if arr is not None:
@@ -106,7 +105,7 @@ def _parse_utxo(raw: dict) -> UTxO:
     lovelace = int(ogmios_value.get("ada", {}).get("lovelace", 0))
 
     # Build multi-asset if present
-    multi_asset: Optional[MultiAsset] = None
+    multi_asset: MultiAsset | None = None
     non_ada_keys = [k for k in ogmios_value if k != "ada"]
     if non_ada_keys:
         ma = MultiAsset()
@@ -137,10 +136,10 @@ def _parse_utxo(raw: dict) -> UTxO:
     datum = None
     datum_hash_val = None
 
-    if "datumHash" in raw and raw["datumHash"]:
+    if raw.get("datumHash"):
         datum_hash_val = DatumHash.from_primitive(raw["datumHash"])
 
-    if "datum" in raw and raw["datum"]:
+    if raw.get("datum"):
         raw_datum = raw["datum"]
         if isinstance(raw_datum, str):
             # Inline datum as CBOR hex
@@ -167,10 +166,10 @@ class VectorChainContext(ChainContext):
         self._submit = submit
 
         # Caches (lazily populated)
-        self._protocol_param: Optional[ProtocolParameters] = None
-        self._genesis_param: Optional[GenesisParameters] = None
-        self._epoch: Optional[int] = None
-        self._last_block_slot: Optional[int] = None
+        self._protocol_param: ProtocolParameters | None = None
+        self._genesis_param: GenesisParameters | None = None
+        self._epoch: int | None = None
+        self._last_block_slot: int | None = None
 
     # ------------------------------------------------------------------
     # Async helpers (can be used directly from async callers)
@@ -197,11 +196,11 @@ class VectorChainContext(ChainContext):
         tip = await self._ogmios.query_network_tip()
         return int(tip.get("slot", 0))
 
-    async def async_utxos(self, address: str) -> List[UTxO]:
+    async def async_utxos(self, address: str) -> list[UTxO]:
         raw_utxos = await self._ogmios.query_utxos([str(address)])
         return [_parse_utxo(u) for u in raw_utxos]
 
-    async def async_submit_tx_cbor(self, cbor: Union[bytes, str]) -> str:
+    async def async_submit_tx_cbor(self, cbor: bytes | str) -> str:
         if isinstance(cbor, bytes):
             cbor = cbor.hex()
         return await self._submit.submit(cbor)
@@ -234,41 +233,20 @@ class VectorChainContext(ChainContext):
     def last_block_slot(self) -> int:
         return _run_sync(self.async_last_block_slot())
 
-    def utxos(self, address: str) -> List[UTxO]:
+    def utxos(self, address: str) -> list[UTxO]:
         return _run_sync(self.async_utxos(str(address)))
 
-    def submit_tx_cbor(self, cbor: Union[bytes, str]) -> str:
+    def submit_tx_cbor(self, cbor: bytes | str) -> str:
         return _run_sync(self.async_submit_tx_cbor(cbor))
 
-    def evaluate_tx_cbor(self, cbor: Union[bytes, str]) -> Dict[str, ExecutionUnits]:
+    def evaluate_tx_cbor(self, cbor: bytes | str) -> dict[str, ExecutionUnits]:
         if isinstance(cbor, bytes):
             cbor = cbor.hex()
-        # Debug: decode validity_start and mint from the tx CBOR
-        try:
-            import cbor2 as _c2
-            tx_array = _c2.loads(bytes.fromhex(cbor if isinstance(cbor, str) else cbor.hex()))
-            tx_body = tx_array[0] if isinstance(tx_array, list) else tx_array
-            if isinstance(tx_body, dict):
-                vs = tx_body.get(8)
-                ttl = tx_body.get(3)
-                mint = tx_body.get(9)  # key 9 = mint in tx body
-                print(f"[DEBUG:evaluate_tx] validity_start={vs}, ttl={ttl}")
-                if mint:
-                    for policy_bytes, assets in mint.items():
-                        policy_hex = policy_bytes.hex() if isinstance(policy_bytes, bytes) else str(policy_bytes)
-                        print(f"[DEBUG:evaluate_tx] mint_policy={policy_hex[:16]}...")
-                        for name_bytes, qty in assets.items():
-                            name_hex = name_bytes.hex() if isinstance(name_bytes, bytes) else str(name_bytes)
-                            print(f"  asset={name_hex[:16]}... qty={qty}")
-                else:
-                    print("[DEBUG:evaluate_tx] NO MINT in tx body!")
-        except Exception as _e:
-            print(f"[DEBUG:evaluate_tx] CBOR decode error: {_e}")
         return _run_sync(self._async_evaluate_tx_cbor(cbor))
 
-    async def _async_evaluate_tx_cbor(self, cbor_hex: str) -> Dict[str, ExecutionUnits]:
+    async def _async_evaluate_tx_cbor(self, cbor_hex: str) -> dict[str, ExecutionUnits]:
         result = await self._ogmios.evaluate_tx(cbor_hex)
-        result_dict: Dict[str, ExecutionUnits] = {}
+        result_dict: dict[str, ExecutionUnits] = {}
         # Ogmios returns a list of validator evaluations
         evaluations = result if isinstance(result, list) else []
         for res in evaluations:

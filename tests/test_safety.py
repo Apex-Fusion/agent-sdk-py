@@ -1,9 +1,9 @@
 """Tests for the safety layer."""
 
-from vector_agent.safety import SafetyLayer
-from vector_agent.exceptions import SpendLimitExceededError
-
 import pytest
+
+from vector_agent.exceptions import SpendLimitExceededError
+from vector_agent.safety import SafetyLayer
 
 
 def test_per_tx_limit_allows_under():

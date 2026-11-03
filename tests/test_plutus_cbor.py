@@ -5,10 +5,8 @@ builtin.serialise_data() for known inputs.  Expected hex values come from
 Aiken stdlib tests (``cbor.test.ak``).
 """
 
-import hashlib
 
 import cbor2
-import pytest
 
 from vector_agent.chain.plutus_cbor import plutus_serialise_data
 
@@ -72,47 +70,28 @@ class TestPlutusSerialiseData:
 
 
 class TestTokenNameDerivation:
-    """Verify token name functions produce correct results after the fix."""
+    """Module-6 token names: the old helper's encoding equals the codec's encoding."""
 
-    def test_proposal_token_name_length(self):
-        from vector_agent.governance.client import GovernanceClient
+    def test_seed_token_names_use_the_indefinite_output_reference(self):
+        from vector_agent.governance import critique_token_name, proposal_token_name
+        from vector_agent.identity.ids import blake2b_256
+        from vector_agent.identity.types import OutputReference
 
-        token = GovernanceClient._proposal_token_name("00" * 32, 0)
-        assert len(token) == 32
-        assert token[:5] == b"prop_"
+        seed = OutputReference(bytes([0xAB]) * 32, 3)
+        digest = blake2b_256(plutus_serialise_data(0, [seed.tx_id, seed.index]))[:27]
+        assert proposal_token_name(seed) == b"prop_" + digest
+        assert critique_token_name(seed) == b"crit_" + digest
+        assert proposal_token_name(OutputReference(bytes([0xAA]) * 32, 0)) != proposal_token_name(
+            OutputReference(bytes([0xBB]) * 32, 0)
+        )
 
-    def test_critique_token_name_length(self):
-        from vector_agent.governance.client import GovernanceClient
+    def test_endorsement_and_activity_names(self):
+        from vector_agent.governance import activity_token_name, endorsement_token_name
+        from vector_agent.identity.ids import blake2b_256
+        from vector_agent.identity.types import OutputReference
 
-        token = GovernanceClient._critique_token_name("00" * 32, 0)
-        assert len(token) == 32
-        assert token[:5] == b"crit_"
-
-    def test_endorsement_token_name_length(self):
-        from vector_agent.governance.client import GovernanceClient
-
-        token = GovernanceClient._endorsement_token_name("00" * 32, 0)
-        assert len(token) == 32
-        assert token[:5] == b"gend_"
-
-    def test_activity_token_name_unchanged(self):
-        """Activity token doesn't use CBOR — should be unaffected."""
-        from vector_agent.governance.client import GovernanceClient
-
-        token = GovernanceClient._activity_token_name("did:vector:test_agent")
-        assert len(token) == 32
-        assert token[:5] == b"pact_"
-
-    def test_different_refs_produce_different_names(self):
-        from vector_agent.governance.client import GovernanceClient
-
-        t1 = GovernanceClient._proposal_token_name("aa" * 32, 0)
-        t2 = GovernanceClient._proposal_token_name("bb" * 32, 0)
-        assert t1 != t2
-
-    def test_proposal_token_deterministic(self):
-        from vector_agent.governance.client import GovernanceClient
-
-        t1 = GovernanceClient._proposal_token_name("ab" * 32, 3)
-        t2 = GovernanceClient._proposal_token_name("ab" * 32, 3)
-        assert t1 == t2
+        agent = bytes([0xA1]) * 32
+        seed = OutputReference(bytes(32), 0)
+        assert endorsement_token_name(agent, seed) == b"gend_" + blake2b_256(agent + seed.to_cbor())[:27]
+        assert activity_token_name(agent) == b"pact_" + blake2b_256(agent)[:27]
+        assert len(activity_token_name(agent)) == 32
