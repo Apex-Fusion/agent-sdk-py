@@ -11,7 +11,8 @@
 
 Builders return an unsigned :class:`BuiltTx` with the key hashes that must
 sign it; signing stays with the caller (:func:`add_signatures`). Script
-parameters are deployment values from :class:`IdentityConfig`.
+parameters are deployment values from :class:`IdentityConfig`; on mainnet,
+unset values take :data:`MAINNET_IDENTITY_DEPLOYMENT`.
 """
 
 from vector_agent.identity.attestation import (
@@ -21,7 +22,7 @@ from vector_agent.identity.attestation import (
     verify_envelope,
 )
 from vector_agent.identity.chain import Ledger, OgmiosKoiosLedger, SlotClock
-from vector_agent.identity.config import ENV_VARS, IdentityConfig
+from vector_agent.identity.config import ENV_VARS, MAINNET_IDENTITY_DEPLOYMENT, IdentityConfig, PublishedDeployment
 from vector_agent.identity.context import AuthenticOutput, IdentityContext
 from vector_agent.identity.delegation import Delegations, escrow_resource
 from vector_agent.identity.errors import IdentityConfigError, IdentityLookupError, IdentityRuleError
@@ -79,6 +80,7 @@ __all__ = [
     "CONTROLLER_SET",
     "DEFAULT_VALID_FOR_S",
     "ENV_VARS",
+    "MAINNET_IDENTITY_DEPLOYMENT",
     "AgentDelegator",
     "AgentView",
     "AttestationDatum",
@@ -110,6 +112,7 @@ __all__ = [
     "Party",
     "PartySpec",
     "PrincipalKey",
+    "PublishedDeployment",
     "ResolvedKey",
     "Role",
     "ScriptSigner",

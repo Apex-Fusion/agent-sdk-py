@@ -22,6 +22,7 @@ Vector runs a public testnet and mainnet. The SDK talks to whichever endpoints y
 | `VECTOR_SUBMIT_URL` | `https://submit.vector.testnet.apexfusion.org/api/submit/tx` | `https://submit.vector.mainnet.apexfusion.org/api/submit/tx` |
 | `VECTOR_KOIOS_URL` | `https://v2.koios.vector.testnet.apexfusion.org/` | `https://v2.koios.vector.mainnet.apexfusion.org/` |
 | `VECTOR_EXPLORER_URL` | `https://vector.testnet.apexscan.org` | `https://vector.apexscan.org/en/` |
+| `VECTOR_IDENTITY_NETWORK` | `testnet` | `mainnet` (default) |
 
 Two things to know: Vector's testnet uses the **mainnet network ID**, so all addresses start with `addr1`. And the native coin is **AP3X** (smallest unit DFM, 1 AP3X = 1,000,000 DFM). Since 0.1.11 the amount parameters accept `apex=` (whole AP3X) and `dfm=` (smallest unit) as the preferred names; `ada=`/`lovelace=` remain as compatibility aliases from the underlying Cardano tooling, and response fields keep their tooling names. 0.1.11 also adds `vector_agent.self_improvement` as the preferred import for the Game 6 client (`SelfImprovementClient`); `vector_agent.governance` remains as a compatibility alias.
 
@@ -186,7 +187,7 @@ from vector_agent.identity import (
     IdentityContext, IdentityRegistry, KeyHashSigner, PartySpec, Role, add_signatures,
 )
 
-ctx = IdentityContext.connect()          # IdentityConfig.from_env(), Vector mainnet endpoints
+ctx = IdentityContext.connect()          # IdentityConfig.from_env(): Vector mainnet and its published deployment
 registry = IdentityRegistry(ctx)
 built = registry.register(
     "addr1...",                          # pays the fee and the deposit: max(10 AP3X, ledger minimum)
@@ -213,20 +214,27 @@ view = registry.current_record(built.created_id)   # the gateway's view (effecti
 
 A builder refuses a transaction that the contract would reject: it raises `IdentityRuleError` with the broken rule. A missing record raises `IdentityLookupError`.
 
-The script parameters are deployment values. The SDK applies them to the embedded unapplied scripts:
+The script parameters are deployment values. The SDK applies them to the embedded unapplied scripts. On mainnet, the default network, `IdentityConfig.from_env()` gives an unset deployment value the published value of `MAINNET_IDENTITY_DEPLOYMENT`: the identity side of the release, live since 2026-11-03 (agents-marketplace [`contracts/identity-marketplace/deploy/mainnet/`](https://github.com/Apex-Fusion/agents-marketplace/tree/main/contracts/identity-marketplace/deploy/mainnet)). A value that you set always wins.
 
-| Environment variable | Description |
-|---|---|
-| `VECTOR_IDENTITY_LEGACY_ROOT` | Allowlist Merkle root (64 hex). Required for transactions. |
-| `VECTOR_IDENTITY_CONFIG_SEED` | Seed of the configuration policy, `<tx id>#<index>`. Required for transactions. |
-| `VECTOR_IDENTITY_POLICY_ID` | Optional check: the identity policy ID that the two values above must give. |
-| `VECTOR_IDENTITY_LEGACY_HASH` | Legacy registry hash. Default `be1a0a29…2c01`. |
-| `VECTOR_IDENTITY_REF_UTXO`, `VECTOR_ATTESTATION_REF_UTXO`, `VECTOR_DELEGATION_REF_UTXO`, `VECTOR_VAULT_REF_UTXO`, `VECTOR_LEGACY_REGISTRY_REF_UTXO` | Reference-script outputs, `<tx id>#<index>`. Without one, the transaction carries the script. |
-| `VECTOR_MODULE1_REF_UTXO` | Reference script of Module-1 `identity_party`; needed only to appoint Module-1 as a party. |
-| `VECTOR_IDENTITY_CONFIG_UTXO` | The configuration record. Default: found at the configuration address. |
-| `VECTOR_IDENTITY_GATEWAY_URL` | Default `https://id.vector.apexfusion.org`. |
-| `VECTOR_OGMIOS_URL`, `VECTOR_KOIOS_URL`, `VECTOR_KOIOS_TOKEN` | Ledger reads. Defaults: Vector mainnet Ogmios and Koios. |
-| `VECTOR_MARKETPLACE_INDEXER_URL` | Indexer for the advert listing check of `Vaults.pay`. |
+| Environment variable | Description | Mainnet default |
+|---|---|---|
+| `VECTOR_IDENTITY_NETWORK` | `mainnet` or `testnet`. It selects the published deployment values; it does not change the endpoints. | `mainnet` |
+| `VECTOR_IDENTITY_LEGACY_ROOT` | Allowlist Merkle root (64 hex). | `e4b6b17ce4a8f83aa17d3181ea140d2bd76c0cfa8a7c44ad69543800b4a0df01` |
+| `VECTOR_IDENTITY_CONFIG_SEED` | Seed of the configuration policy, `<tx id>#<index>`. | `6c9856c70b1101f1a4e9ceb373188608013416eff48c51f5bb62706a65d41a2a#0` |
+| `VECTOR_IDENTITY_POLICY_ID` | Check: the identity policy ID that the two values above must give. | `d958b823faaa76977d0a07bd9622e87d8e2c85f6692f7f8e8db77762` |
+| `VECTOR_IDENTITY_LEGACY_HASH` | Legacy registry hash (default on both networks). | `be1a0a2912da180757ed3cd61b56bb8eab0188c19dc3c0e3912d2c01` |
+| `VECTOR_IDENTITY_REF_UTXO` | Reference script of `identity`, `<tx id>#<index>`. | `3d4471222e524584180a4358e05517a243effc46d15ef62443a82aaed822de46#0` |
+| `VECTOR_ATTESTATION_REF_UTXO` | Reference script of `attestation`. | `55dfa9e05ff96844fd4313f1c7cb7f0c7f900f1cdf50099b0e2abb242da4128d#0` |
+| `VECTOR_DELEGATION_REF_UTXO` | Reference script of `delegation`. | `f6d47a62146b2bc4dabc12454c8a3dbbedf673d45a6edccd1c462d55c8ba8be7#0` |
+| `VECTOR_VAULT_REF_UTXO` | Reference script of `vault`. | `d0bf8f73c915fcbf57ddba714256e520a9a0820bc9e643218db8cf54762d215b#0` |
+| `VECTOR_LEGACY_REGISTRY_REF_UTXO` | Reference script of the legacy registry. | none |
+| `VECTOR_MODULE1_REF_UTXO` | Reference script of Module-1 `identity_party`; needed only to appoint Module-1 as a party. | none until the seal |
+| `VECTOR_IDENTITY_CONFIG_UTXO` | The configuration record. Default: found at the configuration address. | none |
+| `VECTOR_IDENTITY_GATEWAY_URL` | Identity gateway. | `https://id.vector.apexfusion.org` |
+| `VECTOR_OGMIOS_URL`, `VECTOR_KOIOS_URL`, `VECTOR_KOIOS_TOKEN` | Ledger reads. | Vector mainnet Ogmios and Koios, no token |
+| `VECTOR_MARKETPLACE_INDEXER_URL` | Indexer for the advert listing check of `Vaults.pay`. | none |
+
+The root and the seed apply together: when you set only one of them, the other gets no default, and `scripts()` raises `IdentityConfigError`. The published policy ID and reference outputs apply only when the legacy hash, the root and the seed are the published values. Without a reference output, a transaction carries the script itself. `scripts()` derives the identity policy ID from the root and the seed and compares it with `VECTOR_IDENTITY_POLICY_ID` (or the published value). On the testnet, no deployment value has a default: set `VECTOR_IDENTITY_LEGACY_ROOT` and `VECTOR_IDENTITY_CONFIG_SEED` for transactions. `MAINNET_IDENTITY_DEPLOYMENT` also holds the `escrow` and `advert` reference outputs, which the clients of this SDK do not use. In code, `IdentityConfig.from_env(network="testnet")` selects the testnet, and a keyword argument of `None` sets no value and no default. `IdentityConfig(...)` without `from_env` takes only the values that you give.
 
 ## Self-Improvement module (Module-6)
 

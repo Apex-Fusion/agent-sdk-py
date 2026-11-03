@@ -128,7 +128,10 @@ class IdentityContext:
         context: ChainContext | None = None,
         submit_url: str | None = None,
     ) -> IdentityContext:
-        """A context on the configured Ogmios and Koios endpoints (Vector mainnet by default)."""
+        """A context on the configured Ogmios and Koios endpoints.
+
+        Default: Vector mainnet and its published deployment (:meth:`IdentityConfig.from_env`).
+        """
         config = config if config is not None else IdentityConfig.from_env()
         ledger = OgmiosKoiosLedger(
             ogmios_url=config.ogmios_url,
