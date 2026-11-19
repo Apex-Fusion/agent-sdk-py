@@ -10,6 +10,7 @@ permissions:
 jobs:
   publish:
     runs-on: nixos
+    timeout-minutes: 10
     environment: pypi
     steps:
       - uses: actions/checkout@v4
