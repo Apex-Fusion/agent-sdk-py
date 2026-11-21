@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   publish:
-    runs-on: nixos
+    runs-on: self-hosted
     timeout-minutes: 10
     environment: pypi
     steps:
